@@ -12,7 +12,7 @@ import { saveAs } from 'file-saver';
 /**
  * Parse markdown content and convert to docx paragraphs
  */
-function parseMarkdownToDocx(markdown) {
+export function parseMarkdownToDocx(markdown) {
     const lines = markdown.split('\n');
     const elements = [];
     let inCodeBlock = false;
@@ -153,7 +153,7 @@ function parseMarkdownToDocx(markdown) {
 /**
  * Parse inline markdown formatting (bold, italic, code)
  */
-function parseInlineFormatting(text) {
+export function parseInlineFormatting(text) {
     const runs = [];
     let remaining = text;
 
