@@ -12,6 +12,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "docx": "^9.5.1",
+    "file-saver": "^2.0.5",
     "lucide-react": "^0.309.0",
     "mammoth": "^1.11.0",
     "pdfjs-dist": "^5.4.530",

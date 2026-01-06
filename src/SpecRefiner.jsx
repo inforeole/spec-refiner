@@ -8,6 +8,7 @@ import {
     MessageList
 } from './components';
 import { processFiles } from './utils/fileProcessing';
+import { downloadAsWord } from './utils/wordExport';
 
 // Welcome message shown on first load
 const WELCOME_MESSAGE = `👋 Salut ! Je suis l'assistant IA de Philippe, spécialisé en conception de produits SaaS.
@@ -90,7 +91,19 @@ RÈGLES GÉNÉRALES :
 - Propose des options quand c'est utile
 - Creuse les détails importants pour l'expérience utilisateur
 
-Quand tu as assez d'informations, réponds avec exactement "[SPEC_COMPLETE]" suivi de la spécification finale complète en markdown bien structuré. Si le projet a été découpé en lots, structure la spec avec le lot 1 très détaillé et les lots suivants en vision macro.`;
+FINALISATION :
+Quand tu estimes avoir assez d'informations pour rédiger les spécifications, tu DOIS :
+1. Le signaler à l'utilisateur
+2. Lui proposer de générer le document de spécifications
+3. Lui expliquer qu'il pourra télécharger un fichier Word (.docx) bien mis en forme
+4. Lui dire qu'il pourra le relire, faire des modifications si besoin, et l'envoyer à Philippe
+
+Exemple de formulation :
+"Je pense avoir assez d'éléments pour rédiger tes spécifications !
+
+Tu veux que je génère le document ? Tu pourras le télécharger en format Word, le relire tranquillement, faire des modifs si besoin, et l'envoyer à Philippe quand tu es prêt."
+
+Si l'utilisateur confirme, réponds avec exactement "[SPEC_COMPLETE]" suivi de la spécification finale complète en markdown bien structuré. Si le projet a été découpé en lots, structure la spec avec le lot 1 très détaillé et les lots suivants en vision macro.`;
 
 export default function SpecRefiner() {
     // Auth state
@@ -391,13 +404,7 @@ export default function SpecRefiner() {
     };
 
     const downloadSpec = () => {
-        const blob = new Blob([finalSpec], { type: 'text/markdown' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'specifications.md';
-        a.click();
-        URL.revokeObjectURL(url);
+        downloadAsWord(finalSpec, 'specifications.docx');
     };
 
     const reset = () => {
@@ -532,7 +539,7 @@ export default function SpecRefiner() {
                             className="bg-violet-600 hover:bg-violet-500 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
                         >
                             <Download className="w-4 h-4" />
-                            Télécharger .md
+                            Télécharger Word
                         </button>
                         <button
                             onClick={reset}
