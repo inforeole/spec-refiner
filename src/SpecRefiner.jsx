@@ -70,7 +70,7 @@ export default function SpecRefiner() {
 
     const messagesEndRef = useRef(null);
 
-    // Authentication check on mount
+    // Check auth on mount
     useEffect(() => {
         const sessionAuth = sessionStorage.getItem('spec-refiner-auth');
         if (sessionAuth === 'true') {
@@ -117,7 +117,10 @@ export default function SpecRefiner() {
 
     const handleLogin = (e) => {
         e.preventDefault();
-        const correctPassword = import.meta.env.VITE_APP_PASSWORD;
+        // Strip quotes and trim in case .env has quoted value
+        const correctPassword = (import.meta.env.VITE_APP_PASSWORD || '')
+            .replace(/^["']|["']$/g, '')
+            .trim();
         if (passwordInput === correctPassword) {
             setIsAuthenticated(true);
             setAuthError(false);
