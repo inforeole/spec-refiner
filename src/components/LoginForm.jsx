@@ -10,7 +10,7 @@ export default function LoginForm({ onSubmit, error, value, onChange }) {
                 <div className="w-16 h-16 bg-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
                     <Sparkles className="w-8 h-8 text-white" />
                 </div>
-                <h1 className="text-2xl font-bold text-white mb-2">Vous avez dis spécifications !?<br />En avant !</h1>
+                <h1 className="text-2xl font-bold text-white mb-2">Vous avez dit spécifications !?<br />En avant !</h1>
                 <p className="text-slate-400 mb-6">Accès sécurisé</p>
 
                 <form onSubmit={onSubmit} className="space-y-4">
