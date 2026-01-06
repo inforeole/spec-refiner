@@ -259,6 +259,11 @@ export default function SpecRefiner() {
         setChatFiles(prev => [...prev, ...selectedFiles]);
     };
 
+    const handleFileSelect = (e) => {
+        const selectedFiles = Array.from(e.target.files);
+        setFiles(prev => [...prev, ...selectedFiles]);
+    };
+
     const removeFile = (index) => {
         setFiles(prev => prev.filter((_, i) => i !== index));
     };
