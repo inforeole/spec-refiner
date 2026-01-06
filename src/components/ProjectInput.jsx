@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { FileText, Loader2, Sparkles, Upload } from 'lucide-react';
 import FileList from './FileList';
 
@@ -10,15 +11,69 @@ export default function ProjectInput({
     onSubmit,
     isLoading
 }) {
+    const [isDragging, setIsDragging] = useState(false);
+
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!isLoading) setIsDragging(true);
+    };
+
+    const handleDragLeave = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.currentTarget === e.target) setIsDragging(false);
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        if (isLoading) return;
+
+        const droppedFiles = Array.from(e.dataTransfer.files);
+        if (droppedFiles.length > 0) {
+            onFileSelect({ target: { files: droppedFiles } });
+        }
+    };
+
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <div
+            className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4 relative"
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+        >
+            {/* Drag overlay */}
+            {isDragging && (
+                <div className="absolute inset-0 bg-violet-900/80 backdrop-blur-sm z-50 flex items-center justify-center">
+                    <div className="bg-slate-800 border-2 border-dashed border-violet-500 rounded-2xl p-12 text-center">
+                        <Upload className="w-16 h-16 text-violet-400 mx-auto mb-4" />
+                        <p className="text-white text-xl font-medium">Dépose tes fichiers ici</p>
+                        <p className="text-slate-400 text-sm mt-2">Images, PDF, Word, texte...</p>
+                    </div>
+                </div>
+            )}
+
             <div className="w-full max-w-3xl">
                 <div className="text-center mb-8">
                     <div className="inline-flex items-center justify-center w-16 h-16 bg-violet-600 rounded-2xl mb-4">
                         <Sparkles className="w-8 h-8 text-white" />
                     </div>
-                    <h1 className="text-3xl font-bold text-white mb-2">Vous avez dis spécifications !?<br />En avant !</h1>
-                    <p className="text-slate-400">Transformez vos idées en spécifications claires</p>
+                    <h1 className="text-3xl font-bold text-white mb-2">Vous avez dit spécifications ?<br />En avant !</h1>
+                    <p className="text-slate-400 mb-6">Transformez vos idées en spécifications claires</p>
+
+                    <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-4 text-left max-w-2xl mx-auto">
+                        <p className="text-slate-300 text-sm leading-relaxed mb-3">
+                            👋 Salut ! Je suis l&apos;assistant IA de Philippe, spécialisé en conception de produits SaaS.
+                        </p>
+                        <p className="text-slate-300 text-sm leading-relaxed mb-3">
+                            Je vais te guider à travers une série de questions pour transformer ton idée en spécifications claires et exploitables. Ça prend environ 10-15 minutes.
+                        </p>
+                        <p className="text-slate-400 text-sm leading-relaxed">
+                            💡 <span className="text-violet-400">À tout moment</span>, tu peux répondre dans la zone de texte ou m&apos;envoyer des fichiers (images, PDF, documents) pour illustrer ton projet.
+                        </p>
+                    </div>
                 </div>
 
                 <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-2xl p-6">

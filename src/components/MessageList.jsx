@@ -1,5 +1,6 @@
 import { forwardRef } from 'react';
 import { Loader2 } from 'lucide-react';
+import MarkdownRenderer from './MarkdownRenderer';
 
 const MessageList = forwardRef(function MessageList({ messages, isLoading }, ref) {
     return (
@@ -21,7 +22,11 @@ const MessageList = forwardRef(function MessageList({ messages, isLoading }, ref
                             {msg.isInitial && (
                                 <div className="text-violet-400 text-xs font-medium mb-2">VOTRE IDÉE</div>
                             )}
-                            <div className="whitespace-pre-wrap">{msg.content}</div>
+                            {msg.role === 'assistant' ? (
+                                <MarkdownRenderer content={msg.content} />
+                            ) : (
+                                <div className="whitespace-pre-wrap">{msg.content}</div>
+                            )}
                         </div>
                     </div>
                 ))}
