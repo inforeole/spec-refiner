@@ -398,7 +398,7 @@ export default function SpecRefiner() {
         }));
         conversationHistory.push({
             role: 'user',
-            content: 'Génère maintenant la spécification finale complète avec toutes les informations recueillies. Réponds avec [SPEC_COMPLETE] suivi du document.'
+            content: 'Génère maintenant la spécification finale complète avec toutes les informations recueillies. IMPORTANT: Commence le document par 2 phrases qui résument clairement l\'objectif du projet et le problème qu\'il résout. Réponds avec [SPEC_COMPLETE] suivi du document.'
         });
 
         try {
@@ -596,16 +596,7 @@ export default function SpecRefiner() {
                             className="bg-violet-600 hover:bg-violet-500 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
                         >
                             <Download className="w-4 h-4" />
-                            Télécharger Word
-                        </button>
-                        <button
-                            onClick={requestFinalSpec}
-                            disabled={isLoading}
-                            className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
-                            title="Régénérer les spécifications"
-                        >
-                            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                            {isLoading ? 'Génération...' : 'Régénérer'}
+                            Spécifications
                         </button>
                         <button
                             onClick={reset}
@@ -619,6 +610,21 @@ export default function SpecRefiner() {
 
                 {/* Spec content */}
                 <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-2xl p-8">
+                    {/* Date and regenerate button */}
+                    <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-700">
+                        <p className="text-slate-400 text-sm">
+                            Généré le {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <button
+                            onClick={requestFinalSpec}
+                            disabled={isLoading}
+                            className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
+                            title="Régénérer les spécifications"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                            {isLoading ? 'Génération...' : 'Régénérer'}
+                        </button>
+                    </div>
                     <MarkdownRenderer content={finalSpec} />
                 </div>
             </div>
