@@ -1,12 +1,23 @@
-// Note: dangerouslySetInnerHTML is used here for markdown rendering.
-// Content comes from AI responses. Consider adding DOMPurify for extra safety.
+import DOMPurify from 'dompurify';
 
+/**
+ * Rendu Markdown sécurisé avec DOMPurify
+ * Sanitize tout le HTML généré pour prévenir les attaques XSS
+ */
 export default function MarkdownRenderer({ content }) {
     const renderMarkdown = (text) => {
         const lines = text.split('\n');
         const elements = [];
         let inList = false;
         let listItems = [];
+
+        // Configuration DOMPurify - autoriser les classes et les liens
+        const purifyConfig = {
+            ALLOWED_TAGS: ['a', 'strong', 'em', 'code'],
+            ALLOWED_ATTR: ['href', 'target', 'rel', 'class']
+        };
+
+        const sanitize = (html) => DOMPurify.sanitize(html, purifyConfig);
 
         const processInlineStyles = (line) => {
             // Links [text](url)
@@ -17,7 +28,7 @@ export default function MarkdownRenderer({ content }) {
             line = line.replace(/\*(.+?)\*/g, '<em>$1</em>');
             // Code
             line = line.replace(/`(.+?)`/g, '<code class="bg-slate-700 px-1.5 py-0.5 rounded text-violet-300 text-sm">$1</code>');
-            return line;
+            return sanitize(line);
         };
 
         const flushList = () => {
