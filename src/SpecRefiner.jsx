@@ -8,6 +8,7 @@ import { useAuth } from './hooks/useAuth';
 import { useChatInput } from './hooks/useChatInput';
 import { useInterviewChat } from './hooks/useInterviewChat';
 import { useTTSMessage } from './hooks/useTTSMessage';
+import { useMessageFlow } from './hooks/useMessageFlow';
 
 export default function SpecRefiner() {
     // ==================== Hooks ====================
@@ -55,22 +56,12 @@ export default function SpecRefiner() {
         toggleAutoPlay
     } = useTTSMessage(messages);
 
+    const { handleSendMessage } = useMessageFlow({
+        chatInput: { inputMessage, chatFiles, clearInput, processCurrentFiles },
+        interviewChat: { isLoading, sendMessage }
+    });
+
     // ==================== Handlers ====================
-
-    const handleSendMessage = async () => {
-        if ((!inputMessage.trim() && chatFiles.length === 0) || isLoading) return;
-
-        const messageText = inputMessage;
-        const currentFiles = [...chatFiles];
-
-        clearInput();
-
-        const processedFiles = currentFiles.length > 0
-            ? await processCurrentFiles(currentFiles)
-            : [];
-
-        await sendMessage(messageText, processedFiles);
-    };
 
     const downloadSpec = () => {
         downloadAsWord(finalSpec, 'specifications.docx');
