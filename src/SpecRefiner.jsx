@@ -1,4 +1,3 @@
-import { useRef, useEffect } from 'react';
 import { AlertCircle } from 'lucide-react';
 
 import { LoginForm, InterviewPhase, CompletePhase } from './components';
@@ -8,7 +7,7 @@ import { useDragDrop } from './hooks/useDragDrop';
 import { useAuth } from './hooks/useAuth';
 import { useChatInput } from './hooks/useChatInput';
 import { useInterviewChat } from './hooks/useInterviewChat';
-import { useTTS } from './hooks/useTTS';
+import { useTTSMessage } from './hooks/useTTSMessage';
 
 export default function SpecRefiner() {
     // ==================== Hooks ====================
@@ -47,48 +46,14 @@ export default function SpecRefiner() {
     });
 
     const {
-        isPlaying: isPlayingAudio,
-        isLoading: isLoadingAudio,
+        messagesEndRef,
         playingMessageId,
+        isPlayingAudio,
+        isLoadingAudio,
         autoPlayEnabled,
-        play: playAudio,
-        toggleAutoPlay,
-        preloadAudio
-    } = useTTS();
-
-    const messagesEndRef = useRef(null);
-    const lastMessageCountRef = useRef(messages.length);
-
-    // Scroll to bottom when messages change
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [messages]);
-
-    // Preload and auto-play TTS for new assistant messages
-    useEffect(() => {
-        // Reset ref if messages were cleared (new session)
-        if (messages.length < lastMessageCountRef.current) {
-            lastMessageCountRef.current = messages.length;
-            return;
-        }
-
-        if (messages.length === 0) return;
-
-        // Check if a new message was added
-        if (messages.length > lastMessageCountRef.current) {
-            const lastMessage = messages[messages.length - 1];
-            if (lastMessage.role === 'assistant') {
-                const messageId = messages.length - 1;
-                // Preload audio in background
-                preloadAudio(lastMessage.content, messageId);
-                // Auto-play if enabled
-                if (autoPlayEnabled) {
-                    playAudio(lastMessage.content, messageId);
-                }
-            }
-        }
-        lastMessageCountRef.current = messages.length;
-    }, [messages, autoPlayEnabled, playAudio, preloadAudio]);
+        playAudio,
+        toggleAutoPlay
+    } = useTTSMessage(messages);
 
     // ==================== Handlers ====================
 
