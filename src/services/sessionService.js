@@ -4,12 +4,12 @@
  */
 
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { TIMEOUTS } from '../config/constants';
 
 const SESSION_KEY = 'default';
 
 // Debounce helper for auto-save
 let saveTimeout = null;
-const SAVE_DEBOUNCE_MS = 1000;
 
 /**
  * Filter messages for storage
@@ -125,7 +125,7 @@ export async function saveSession(data, immediate = false) {
     }
     saveTimeout = setTimeout(() => {
         doSave().catch(console.error);
-    }, SAVE_DEBOUNCE_MS);
+    }, TIMEOUTS.SAVE_DEBOUNCE);
 
     return { success: true, error: null };
 }

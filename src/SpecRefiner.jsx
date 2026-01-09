@@ -12,6 +12,7 @@ import { downloadAsWord } from './utils/wordExport';
 import { useSession } from './hooks/useSession';
 import { uploadImage } from './services/imageService';
 import { isValidResponse } from './utils/responseValidation';
+import { API_CONFIG, INTERVIEW_CONFIG, MARKERS } from './config/constants';
 
 const SYSTEM_PROMPT = `Tu es l'IA de Philippe, un expert en conception de produits SaaS.
 Ton ton est décontracté mais pro (tutoiement par défaut).
@@ -247,8 +248,8 @@ export default function SpecRefiner() {
                 'X-Title': 'Spec Refiner',
             },
             body: JSON.stringify({
-                model: 'anthropic/claude-3.5-sonnet',
-                max_tokens: 8192,
+                model: API_CONFIG.MODEL,
+                max_tokens: API_CONFIG.MAX_TOKENS,
                 messages: [
                     { role: 'system', content: SYSTEM_PROMPT },
                     ...conversationHistory
@@ -266,7 +267,7 @@ export default function SpecRefiner() {
         return data.choices[0].message.content;
     };
 
-    const callAPIWithRetry = async (conversationHistory, maxRetries = 2) => {
+    const callAPIWithRetry = async (conversationHistory, maxRetries = API_CONFIG.MAX_RETRIES) => {
         let response = await callAPI(conversationHistory);
         let retryCount = 0;
 
@@ -291,7 +292,7 @@ export default function SpecRefiner() {
     };
 
     const handleSpecComplete = (response) => {
-        const specContent = response.replace('[SPEC_COMPLETE]', '').trim();
+        const specContent = response.replace(MARKERS.SPEC_COMPLETE, '').trim();
         updateFinalSpec(specContent);
         updatePhase('complete');
     };
@@ -376,7 +377,7 @@ export default function SpecRefiner() {
                 return;
             }
 
-            if (response.includes('[SPEC_COMPLETE]')) {
+            if (response.includes(MARKERS.SPEC_COMPLETE)) {
                 handleSpecComplete(response);
             } else {
                 updateMessages(prev => [...prev, { role: 'assistant', content: response }]);
@@ -534,7 +535,7 @@ export default function SpecRefiner() {
                                     Voir les specs
                                 </button>
                             )}
-                            {questionCount >= 3 && !finalSpec && (
+                            {questionCount >= INTERVIEW_CONFIG.MIN_QUESTIONS_BEFORE_SPEC && !finalSpec && (
                                 <button
                                     onClick={requestFinalSpec}
                                     disabled={isLoading}
