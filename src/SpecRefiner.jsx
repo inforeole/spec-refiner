@@ -253,6 +253,7 @@ export default function SpecRefiner() {
             },
             body: JSON.stringify({
                 model: 'anthropic/claude-3.5-sonnet',
+                max_tokens: 4096,
                 messages: [
                     { role: 'system', content: SYSTEM_PROMPT },
                     ...conversationHistory
