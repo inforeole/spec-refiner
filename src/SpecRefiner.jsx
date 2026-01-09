@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Download, RotateCcw, Sparkles, CheckCircle2, Upload, AlertCircle } from 'lucide-react';
+import { Download, RotateCcw, RefreshCw, Sparkles, CheckCircle2, Upload, AlertCircle } from 'lucide-react';
 
 import {
     ChatInput,
@@ -599,8 +599,18 @@ export default function SpecRefiner() {
                             Télécharger Word
                         </button>
                         <button
+                            onClick={requestFinalSpec}
+                            disabled={isLoading}
+                            className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
+                            title="Régénérer les spécifications"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                            {isLoading ? 'Génération...' : 'Régénérer'}
+                        </button>
+                        <button
                             onClick={reset}
                             className="bg-slate-700 hover:bg-slate-600 text-white p-2 rounded-lg transition-colors"
+                            title="Recommencer"
                         >
                             <RotateCcw className="w-5 h-5" />
                         </button>
