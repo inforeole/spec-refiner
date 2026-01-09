@@ -553,13 +553,6 @@ export default function SpecRefiner() {
                                     Générer les specs
                                 </button>
                             )}
-                            <button
-                                onClick={reset}
-                                className="bg-slate-700 hover:bg-slate-600 text-white p-2 rounded-lg transition-colors"
-                                title="Recommencer"
-                            >
-                                <RotateCcw className="w-5 h-5" />
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -580,6 +573,17 @@ export default function SpecRefiner() {
                     disabled={isLoading || isProcessingFiles}
                     isProcessingFiles={isProcessingFiles}
                 />
+
+                {/* Footer */}
+                <div className="py-3 flex justify-center border-t border-slate-800">
+                    <button
+                        onClick={reset}
+                        className="text-slate-500 hover:text-slate-300 text-sm flex items-center gap-2 transition-colors"
+                    >
+                        <RotateCcw className="w-4 h-4" />
+                        Recommencer un nouveau projet
+                    </button>
+                </div>
             </div>
         );
     }
