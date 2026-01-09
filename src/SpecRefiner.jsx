@@ -12,9 +12,9 @@ import { downloadAsWord } from './utils/wordExport';
 import { useSession } from './hooks/useSession';
 import { useDragDrop } from './hooks/useDragDrop';
 import { uploadImage } from './services/imageService';
-import { isValidResponse } from './utils/responseValidation';
-import { API_CONFIG, INTERVIEW_CONFIG, MARKERS } from './config/constants';
+import { INTERVIEW_CONFIG, MARKERS } from './config/constants';
 import { SYSTEM_PROMPT } from './prompts/systemPrompt';
+import { callAPIWithRetry } from './services/apiService';
 
 export default function SpecRefiner() {
     // Auth state
@@ -93,65 +93,28 @@ export default function SpecRefiner() {
 
     // ==================== API ====================
 
-    const callAPI = async (conversationHistory) => {
-        const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
-        if (!apiKey) {
-            throw new Error('Clé API manquante. Ajoutez VITE_OPENROUTER_API_KEY dans le fichier .env');
-        }
-
-        // Create new AbortController for this request
-        abortControllerRef.current = new AbortController();
-
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`,
-                'HTTP-Referer': window.location.origin,
-                'X-Title': 'Spec Refiner',
-            },
-            body: JSON.stringify({
-                model: API_CONFIG.MODEL,
-                max_tokens: API_CONFIG.MAX_TOKENS,
-                messages: [
-                    { role: 'system', content: SYSTEM_PROMPT },
-                    ...conversationHistory
-                ]
-            }),
-            signal: abortControllerRef.current.signal
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error?.message || 'API request failed');
-        }
-
-        const data = await response.json();
-        return data.choices[0].message.content;
-    };
-
-    const callAPIWithRetry = async (conversationHistory, maxRetries = API_CONFIG.MAX_RETRIES) => {
-        let response = await callAPI(conversationHistory);
-        let retryCount = 0;
-
-        while (!isValidResponse(response) && retryCount < maxRetries) {
-            console.warn(`Réponse incohérente détectée (tentative ${retryCount + 1}/${maxRetries}), nouvelle tentative...`);
-            retryCount++;
-            response = await callAPI(conversationHistory);
-        }
-
-        return { response, isValid: isValidResponse(response) };
-    };
-
     const buildConversationHistory = (additionalMessage = null) => {
-        const history = messages.map(m => ({
-            role: m.role,
-            content: m.apiContent || m.content
-        }));
+        // Inclut le system prompt au début
+        const history = [
+            { role: 'system', content: SYSTEM_PROMPT },
+            ...messages.map(m => ({
+                role: m.role,
+                content: m.apiContent || m.content
+            }))
+        ];
         if (additionalMessage) {
             history.push(additionalMessage);
         }
         return history;
+    };
+
+    const callAPI = async (conversationHistory) => {
+        // Create new AbortController for this request
+        abortControllerRef.current = new AbortController();
+        return callAPIWithRetry({
+            messages: conversationHistory,
+            signal: abortControllerRef.current.signal
+        });
     };
 
     const handleSpecComplete = (response) => {
@@ -227,7 +190,7 @@ export default function SpecRefiner() {
             }]);
 
             const conversationHistory = buildConversationHistory({ role: 'user', content: apiContent });
-            const { response, isValid } = await callAPIWithRetry(conversationHistory);
+            const { response, isValid } = await callAPI(conversationHistory);
 
             if (!isValid) {
                 console.error('Réponse API invalide après retries:', response);
@@ -268,7 +231,7 @@ export default function SpecRefiner() {
         });
 
         try {
-            const { response, isValid } = await callAPIWithRetry(conversationHistory);
+            const { response, isValid } = await callAPI(conversationHistory);
 
             if (!isValid) {
                 alert('La génération des spécifications a échoué (réponse incohérente). Veuillez réessayer.');
