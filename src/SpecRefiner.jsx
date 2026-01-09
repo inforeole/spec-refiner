@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Download, RotateCcw, RefreshCw, Sparkles, CheckCircle2, Upload, AlertCircle } from 'lucide-react';
+import { Download, RotateCcw, RefreshCw, Sparkles, CheckCircle2, Upload, AlertCircle, MessageCircle } from 'lucide-react';
 
 import {
     ChatInput,
@@ -253,7 +253,7 @@ export default function SpecRefiner() {
             },
             body: JSON.stringify({
                 model: 'anthropic/claude-3.5-sonnet',
-                max_tokens: 4096,
+                max_tokens: 8192,
                 messages: [
                     { role: 'system', content: SYSTEM_PROMPT },
                     ...conversationHistory
@@ -534,7 +534,16 @@ export default function SpecRefiner() {
                             </div>
                         </div>
                         <div className="flex gap-2">
-                            {questionCount >= 3 && (
+                            {finalSpec && (
+                                <button
+                                    onClick={() => updatePhase('complete')}
+                                    className="bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
+                                >
+                                    <Download className="w-4 h-4" />
+                                    Voir les specs
+                                </button>
+                            )}
+                            {questionCount >= 3 && !finalSpec && (
                                 <button
                                     onClick={requestFinalSpec}
                                     disabled={isLoading}
@@ -592,18 +601,19 @@ export default function SpecRefiner() {
                     </div>
                     <div className="flex gap-2">
                         <button
+                            onClick={() => updatePhase('interview')}
+                            className="bg-slate-700 hover:bg-slate-600 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
+                            title="Voir l'historique de la conversation"
+                        >
+                            <MessageCircle className="w-4 h-4" />
+                            Historique
+                        </button>
+                        <button
                             onClick={downloadSpec}
                             className="bg-violet-600 hover:bg-violet-500 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
                         >
                             <Download className="w-4 h-4" />
                             Spécifications
-                        </button>
-                        <button
-                            onClick={reset}
-                            className="bg-slate-700 hover:bg-slate-600 text-white p-2 rounded-lg transition-colors"
-                            title="Recommencer"
-                        >
-                            <RotateCcw className="w-5 h-5" />
                         </button>
                     </div>
                 </div>
@@ -626,6 +636,17 @@ export default function SpecRefiner() {
                         </button>
                     </div>
                     <MarkdownRenderer content={finalSpec} />
+                </div>
+
+                {/* Footer */}
+                <div className="mt-6 flex justify-center">
+                    <button
+                        onClick={reset}
+                        className="text-slate-500 hover:text-slate-300 text-sm flex items-center gap-2 transition-colors"
+                    >
+                        <RotateCcw className="w-4 h-4" />
+                        Recommencer un nouveau projet
+                    </button>
                 </div>
             </div>
         </div>
