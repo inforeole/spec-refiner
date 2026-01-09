@@ -10,6 +10,7 @@ import {
 import { processFiles } from './utils/fileProcessing';
 import { downloadAsWord } from './utils/wordExport';
 import { useSession } from './hooks/useSession';
+import { useDragDrop } from './hooks/useDragDrop';
 import { uploadImage } from './services/imageService';
 import { isValidResponse } from './utils/responseValidation';
 import { API_CONFIG, INTERVIEW_CONFIG, MARKERS } from './config/constants';
@@ -153,7 +154,12 @@ export default function SpecRefiner() {
     const [isLoading, setIsLoading] = useState(false);
     const [chatFiles, setChatFiles] = useState([]);
     const [isProcessingFiles, setIsProcessingFiles] = useState(false);
-    const [isDragging, setIsDragging] = useState(false);
+
+    // Drag & drop
+    const { isDragging, dragHandlers } = useDragDrop({
+        onDrop: (files) => setChatFiles(prev => [...prev, ...files]),
+        disabled: isLoading
+    });
 
     const messagesEndRef = useRef(null);
     const abortControllerRef = useRef(null);
@@ -195,37 +201,6 @@ export default function SpecRefiner() {
 
     const removeFile = (index) => {
         setChatFiles(prev => prev.filter((_, i) => i !== index));
-    };
-
-    // Drag & drop handlers for the whole window
-    const handleDragOver = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!isLoading) {
-            setIsDragging(true);
-        }
-    };
-
-    const handleDragLeave = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        // Only set to false if leaving the main container
-        if (e.currentTarget === e.target) {
-            setIsDragging(false);
-        }
-    };
-
-    const handleDrop = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragging(false);
-
-        if (isLoading) return;
-
-        const droppedFiles = Array.from(e.dataTransfer.files);
-        if (droppedFiles.length > 0) {
-            setChatFiles(prev => [...prev, ...droppedFiles]);
-        }
     };
 
     // ==================== API ====================
@@ -496,9 +471,7 @@ export default function SpecRefiner() {
         return (
             <div
                 className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col relative"
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
+                {...dragHandlers}
             >
                 {/* Drag overlay */}
                 {isDragging && (

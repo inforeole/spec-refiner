@@ -1,6 +1,6 @@
-import { useState } from 'react';
 import { FileText, Loader2, Sparkles, Upload } from 'lucide-react';
 import FileList from './FileList';
+import { useDragDrop } from '../hooks/useDragDrop';
 
 export default function ProjectInput({
     value,
@@ -11,38 +11,15 @@ export default function ProjectInput({
     onSubmit,
     isLoading
 }) {
-    const [isDragging, setIsDragging] = useState(false);
-
-    const handleDragOver = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (!isLoading) setIsDragging(true);
-    };
-
-    const handleDragLeave = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (e.currentTarget === e.target) setIsDragging(false);
-    };
-
-    const handleDrop = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsDragging(false);
-        if (isLoading) return;
-
-        const droppedFiles = Array.from(e.dataTransfer.files);
-        if (droppedFiles.length > 0) {
-            onFileSelect({ target: { files: droppedFiles } });
-        }
-    };
+    const { isDragging, dragHandlers } = useDragDrop({
+        onDrop: (droppedFiles) => onFileSelect({ target: { files: droppedFiles } }),
+        disabled: isLoading
+    });
 
     return (
         <div
             className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4 relative"
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
+            {...dragHandlers}
         >
             {/* Drag overlay */}
             {isDragging && (
