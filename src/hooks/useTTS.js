@@ -11,7 +11,7 @@ export function useTTS() {
     const [isPlaying, setIsPlaying] = useState(false);
     const [playingMessageId, setPlayingMessageId] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
-    const [ttsAvailable, setTtsAvailable] = useState(true);
+    const [ttsAvailable] = useState(true);
     const [autoPlayEnabled, setAutoPlayEnabled] = useState(() => {
         return localStorage.getItem(STORAGE_KEY) !== 'false';
     });
@@ -62,13 +62,12 @@ export function useTTS() {
 
     // Preload audio in background and cache it
     const preloadAudio = useCallback(async (text, messageId) => {
-        if (!ttsAvailable) return;
         if (audioCacheRef.current.has(messageId)) return;
 
         const { audio, error } = await synthesizeSpeech(text);
         if (error) {
             console.error('TTS preload error:', error);
-            setTtsAvailable(false);
+            // Don't disable TTS on preload errors - manual play may still work
             return;
         }
 
@@ -76,11 +75,9 @@ export function useTTS() {
             const url = URL.createObjectURL(audio);
             audioCacheRef.current.set(messageId, url);
         }
-    }, [ttsAvailable]);
+    }, []);
 
     const play = useCallback(async (text, messageId) => {
-        if (!ttsAvailable) return;
-
         // If already playing this message, stop it
         if (playingMessageId === messageId && isPlaying) {
             audioRef.current.pause();
@@ -131,7 +128,7 @@ export function useTTS() {
 
         if (error) {
             console.error('TTS error:', error);
-            setTtsAvailable(false);
+            // Don't disable TTS permanently - just fail this attempt
             setPlayingMessageId(null);
             return;
         }
@@ -155,7 +152,7 @@ export function useTTS() {
         } else {
             setPlayingMessageId(null);
         }
-    }, [playingMessageId, isPlaying, ttsAvailable]);
+    }, [playingMessageId, isPlaying]);
 
     const stop = useCallback(() => {
         audioRef.current.pause();
