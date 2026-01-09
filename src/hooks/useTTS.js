@@ -11,6 +11,7 @@ export function useTTS() {
     const [isPlaying, setIsPlaying] = useState(false);
     const [playingMessageId, setPlayingMessageId] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [ttsAvailable, setTtsAvailable] = useState(true);
     const [autoPlayEnabled, setAutoPlayEnabled] = useState(() => {
         return localStorage.getItem(STORAGE_KEY) === 'true';
     });
@@ -61,11 +62,13 @@ export function useTTS() {
 
     // Preload audio in background and cache it
     const preloadAudio = useCallback(async (text, messageId) => {
+        if (!ttsAvailable) return;
         if (audioCacheRef.current.has(messageId)) return;
 
         const { audio, error } = await synthesizeSpeech(text);
         if (error) {
             console.error('TTS preload error:', error);
+            setTtsAvailable(false);
             return;
         }
 
@@ -73,9 +76,11 @@ export function useTTS() {
             const url = URL.createObjectURL(audio);
             audioCacheRef.current.set(messageId, url);
         }
-    }, []);
+    }, [ttsAvailable]);
 
     const play = useCallback(async (text, messageId) => {
+        if (!ttsAvailable) return;
+
         // If already playing this message, stop it
         if (playingMessageId === messageId && isPlaying) {
             audioRef.current.pause();
@@ -123,6 +128,7 @@ export function useTTS() {
 
         if (error) {
             console.error('TTS error:', error);
+            setTtsAvailable(false);
             setPlayingMessageId(null);
             return;
         }
@@ -142,7 +148,7 @@ export function useTTS() {
         } else {
             setPlayingMessageId(null);
         }
-    }, [playingMessageId, isPlaying]);
+    }, [playingMessageId, isPlaying, ttsAvailable]);
 
     const stop = useCallback(() => {
         audioRef.current.pause();
@@ -168,6 +174,7 @@ export function useTTS() {
         isLoading,
         playingMessageId,
         autoPlayEnabled,
+        ttsAvailable,
         play,
         stop,
         toggleAutoPlay,

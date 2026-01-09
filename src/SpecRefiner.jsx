@@ -66,6 +66,12 @@ export default function SpecRefiner() {
 
     // Preload and auto-play TTS for new assistant messages
     useEffect(() => {
+        // Reset ref if messages were cleared (new session)
+        if (messages.length < lastMessageCountRef.current) {
+            lastMessageCountRef.current = messages.length;
+            return;
+        }
+
         if (messages.length === 0) return;
 
         // Check if a new message was added
