@@ -64,30 +64,45 @@ THÈMES À EXPLORER (en langage simple) :
 - Quels problèmes concrets cette application résout ?
 - Comment ça se passe AUJOURD'HUI sans l'application ?
 - CONCURRENCE (IMPORTANT) : A-t-il regardé ce qui existe ? Demande les NOMS des outils concurrents, ce qu'il aime et n'aime pas chez chacun. Ces infos doivent apparaître dans les specs finales.
-- A-t-il des documents de référence, maquettes, captures d'écran ou exemples à partager ? (rappeler qu'il peut glisser-déposer des fichiers)
+- A-t-il des documents de référence, maquettes, captures d'écran à partager ? (rappeler qu'il peut glisser-déposer des fichiers)
+- EXEMPLES CONCRETS (IMPORTANT) : Demande explicitement s'il a des exemples à montrer :
+  - Des exemples de DONNÉES EN ENTRÉE (fichiers qu'il devra importer, formulaires à remplir, données sources...)
+  - Des exemples de RÉSULTATS ATTENDUS EN SORTIE (rapports, exports, affichages souhaités...)
+  - Des exemples de TRAITEMENTS ou calculs (règles métier, transformations de données...)
+  Ces exemples peuvent être sous forme écrite (description, copier-coller) ou en documents (images, PDF, Word, Excel, fichiers texte, audio...). Ils sont précieux pour comprendre concrètement le besoin.
 - Le parcours utilisateur idéal, étape par étape
 - Ce qu'on voit sur chaque écran, les actions possibles
 - Les cas particuliers ("et si l'utilisateur fait X ?")
 - Ce qui est vraiment prioritaire vs secondaire
 - Les connexions avec d'autres outils existants
-- Le volume d'utilisateurs attendu
+- VOLUME ET USAGE (IMPORTANT POUR LE DEVIS) :
+  - Combien d'utilisateurs au lancement ? Et dans 1 an ?
+  - À quelle fréquence ils utiliseront l'app (tous les jours, 1x/semaine...) ?
+  - Y a-t-il des pics d'utilisation prévisibles (événements, saisons) ?
 - Les contraintes métier (budget, délais, équipe)
 
 DÉTECTION DE PROJETS IMPORTANTS :
 Si tu détectes que le projet est ambitieux ou complexe (beaucoup de fonctionnalités, plusieurs profils utilisateurs, workflows élaborés...), tu DOIS :
-1. Le signaler clairement à l'utilisateur
-2. Proposer un découpage en lots (ou phases, ou versions)
-3. Demander validation de ce découpage
-4. Pour le LOT 1 : creuser les détails en profondeur (écrans, parcours, cas particuliers)
-5. Pour les LOTS SUIVANTS : rester plus macro (grandes fonctionnalités, objectifs) sans entrer dans les détails
+1. Le signaler IMMÉDIATEMENT à l'utilisateur - ne pas attendre la fin de l'interview
+2. Expliquer qu'un projet de cette taille ne peut pas tenir dans un seul document de specs
+3. Proposer un découpage en lots (ou phases, ou versions)
+4. Demander validation de ce découpage AVANT de continuer l'interview
+5. Pour le LOT 1 uniquement : creuser les détails en profondeur (écrans, parcours, cas particuliers)
+6. Pour les LOTS SUIVANTS : noter uniquement les grandes lignes (objectifs, périmètre macro) - ils seront explorés dans des sessions ultérieures
+
+IMPORTANT : Chaque lot = un document de spécifications distinct. On ne génère QUE les specs du lot 1 dans cette session.
 
 Exemple de formulation :
-"Ton projet est assez costaud ! Je te propose de le découper en plusieurs lots pour y voir plus clair :
-- Lot 1 : [fonctionnalités essentielles]
-- Lot 2 : [fonctionnalités complémentaires]
-- Lot 3 : [fonctionnalités avancées]
+"Stop ! Ton projet est costaud - il y a trop de fonctionnalités pour tout détailler d'un coup.
 
-On détaille à fond le lot 1, et on reste plus général sur les autres. Ça te va ?"
+Je te propose de découper en plusieurs lots :
+- Lot 1 : [fonctionnalités essentielles MVP]
+- Lot 2 : [fonctionnalités complémentaires] → à détailler plus tard
+- Lot 3 : [fonctionnalités avancées] → à détailler plus tard
+
+Aujourd'hui on se concentre sur le lot 1 : je vais te poser plein de questions dessus pour faire des specs complètes. Pour les lots 2 et 3, je note juste les grandes lignes - tu reviendras les détailler dans une prochaine session.
+
+Ça te va ?"
 
 RÈGLES DE LANGAGE :
 - ÉVITE les anglicismes ! Utilise des termes français :
@@ -117,10 +132,17 @@ RÈGLES GÉNÉRALES :
 - Propose des options quand c'est utile
 - Creuse les détails importants pour l'expérience utilisateur
 
+MISE EN FORME :
+- Tu peux utiliser du **gras** pour souligner les points importants
+- Tu peux utiliser de l'*italique* pour les nuances ou les apartés
+- Tu peux utiliser des emojis avec parcimonie quand c'est pertinent (encouragement, validation, alerte...) - pas à chaque message, juste quand ça apporte quelque chose
+- Reste naturel : le but est de rendre l'échange plus vivant, pas d'en faire trop
+
 FINALISATION :
 AVANT de proposer de générer les spécifications, assure-toi d'avoir abordé :
 - Le budget prévu (fourchette acceptable)
 - Le délai souhaité de réalisation
+- Le nombre d'utilisateurs prévu (au lancement et à 1 an)
 
 Si l'utilisateur en parle spontanément plus tôt, note l'info et continue le flow naturellement. Sinon, aborde ces sujets vers la fin de l'entretien.
 
@@ -277,6 +299,36 @@ export default function SpecRefiner() {
         return data.choices[0].message.content;
     };
 
+    const callAPIWithRetry = async (conversationHistory, maxRetries = 2) => {
+        let response = await callAPI(conversationHistory);
+        let retryCount = 0;
+
+        while (!isValidResponse(response) && retryCount < maxRetries) {
+            console.warn(`Réponse incohérente détectée (tentative ${retryCount + 1}/${maxRetries}), nouvelle tentative...`);
+            retryCount++;
+            response = await callAPI(conversationHistory);
+        }
+
+        return { response, isValid: isValidResponse(response) };
+    };
+
+    const buildConversationHistory = (additionalMessage = null) => {
+        const history = messages.map(m => ({
+            role: m.role,
+            content: m.apiContent || m.content
+        }));
+        if (additionalMessage) {
+            history.push(additionalMessage);
+        }
+        return history;
+    };
+
+    const handleSpecComplete = (response) => {
+        const specContent = response.replace('[SPEC_COMPLETE]', '').trim();
+        updateFinalSpec(specContent);
+        updatePhase('complete');
+    };
+
     // ==================== Chat Logic ====================
 
     const sendMessage = async () => {
@@ -343,26 +395,10 @@ export default function SpecRefiner() {
                 apiContent: apiContent
             }]);
 
-            // Build conversation history using apiContent when available
-            const conversationHistory = messages.map(m => ({
-                role: m.role,
-                content: m.apiContent || m.content
-            }));
-            conversationHistory.push({ role: 'user', content: apiContent });
+            const conversationHistory = buildConversationHistory({ role: 'user', content: apiContent });
+            const { response, isValid } = await callAPIWithRetry(conversationHistory);
 
-            // Appel API avec retry si réponse incohérente
-            let response = await callAPI(conversationHistory);
-            let retryCount = 0;
-            const maxRetries = 2;
-
-            while (!isValidResponse(response) && retryCount < maxRetries) {
-                console.warn(`Réponse incohérente détectée (tentative ${retryCount + 1}/${maxRetries}), nouvelle tentative...`);
-                retryCount++;
-                response = await callAPI(conversationHistory);
-            }
-
-            // Si toujours incohérent après les retries, afficher un message d'erreur
-            if (!isValidResponse(response)) {
+            if (!isValid) {
                 console.error('Réponse API invalide après retries:', response);
                 updateMessages(prev => [...prev, {
                     role: 'assistant',
@@ -374,9 +410,7 @@ export default function SpecRefiner() {
             }
 
             if (response.includes('[SPEC_COMPLETE]')) {
-                const specContent = response.replace('[SPEC_COMPLETE]', '').trim();
-                updateFinalSpec(specContent);
-                updatePhase('complete');
+                handleSpecComplete(response);
             } else {
                 updateMessages(prev => [...prev, { role: 'assistant', content: response }]);
                 updateQuestionCount(prev => prev + 1);
@@ -397,43 +431,24 @@ export default function SpecRefiner() {
     const requestFinalSpec = async () => {
         setIsLoading(true);
 
-        // Build conversation history using apiContent when available
-        const conversationHistory = messages.map(m => ({
-            role: m.role,
-            content: m.apiContent || m.content
-        }));
-        conversationHistory.push({
+        const conversationHistory = buildConversationHistory({
             role: 'user',
             content: 'Génère maintenant la spécification finale complète avec toutes les informations recueillies. IMPORTANT: Commence le document par 2 phrases qui résument clairement l\'objectif du projet et le problème qu\'il résout. Réponds avec [SPEC_COMPLETE] suivi du document.'
         });
 
         try {
-            // Appel API avec retry si réponse incohérente
-            let response = await callAPI(conversationHistory);
-            let retryCount = 0;
-            const maxRetries = 2;
+            const { response, isValid } = await callAPIWithRetry(conversationHistory);
 
-            while (!isValidResponse(response) && retryCount < maxRetries) {
-                console.warn(`Réponse spec incohérente (tentative ${retryCount + 1}/${maxRetries}), nouvelle tentative...`);
-                retryCount++;
-                response = await callAPI(conversationHistory);
-            }
-
-            if (!isValidResponse(response)) {
+            if (!isValid) {
                 alert('La génération des spécifications a échoué (réponse incohérente). Veuillez réessayer.');
                 setIsLoading(false);
                 return;
             }
 
-            const specContent = response.replace('[SPEC_COMPLETE]', '').trim();
-            updateFinalSpec(specContent);
-            updatePhase('complete');
+            handleSpecComplete(response);
         } catch (error) {
-            // Ignore abort errors (user reset)
-            if (error.name === 'AbortError') {
-                return;
-            }
-            alert(`❌ Erreur: ${error.message}`);
+            if (error.name === 'AbortError') return;
+            alert(`Erreur: ${error.message}`);
         }
 
         setIsLoading(false);
@@ -443,43 +458,27 @@ export default function SpecRefiner() {
         downloadAsWord(finalSpec, 'specifications.docx');
     };
 
-    const reset = async () => {
-        if (confirm('Voulez-vous vraiment recommencer ? Tout l\'historique sera effacé.')) {
-            // Abort any ongoing API request
-            if (abortControllerRef.current) {
-                abortControllerRef.current.abort();
-                abortControllerRef.current = null;
-            }
+    const resetWithConfirmation = async (confirmMessage) => {
+        if (!confirm(confirmMessage)) return;
 
-            // Reset session in Supabase
-            await resetSession();
-
-            // Reset local UI state
-            setChatFiles([]);
-            setInputMessage('');
-            setIsLoading(false);
-            setIsProcessingFiles(false);
+        // Abort any ongoing API request
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
         }
+
+        // Reset session in Supabase
+        await resetSession();
+
+        // Reset local UI state
+        setChatFiles([]);
+        setInputMessage('');
+        setIsLoading(false);
+        setIsProcessingFiles(false);
     };
 
-    const regenerate = async () => {
-        if (confirm('Voulez-vous vraiment régénérer ? La spécification actuelle, les documents et l\'historique seront supprimés.')) {
-            // Abort any ongoing API request
-            if (abortControllerRef.current) {
-                abortControllerRef.current.abort();
-                abortControllerRef.current = null;
-            }
-
-            // Reset session in Supabase
-            await resetSession();
-
-            // Reset local UI state
-            setChatFiles([]);
-            setInputMessage('');
-            setIsLoading(false);
-            setIsProcessingFiles(false);
-        }
-    };
+    const reset = () => resetWithConfirmation('Voulez-vous vraiment recommencer ? Tout l\'historique sera effacé.');
+    const regenerate = () => resetWithConfirmation('Voulez-vous vraiment régénérer ? La spécification actuelle, les documents et l\'historique seront supprimés.');
 
     // ==================== Render ====================
 

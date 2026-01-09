@@ -9,6 +9,8 @@ export default function MarkdownRenderer({ content }) {
         let listItems = [];
 
         const processInlineStyles = (line) => {
+            // Links [text](url)
+            line = line.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-violet-400 hover:text-violet-300 underline">$1</a>');
             // Bold
             line = line.replace(/\*\*(.+?)\*\*/g, '<strong class="text-white font-semibold">$1</strong>');
             // Italic
