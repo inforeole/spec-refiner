@@ -118,6 +118,12 @@ RÈGLES GÉNÉRALES :
 - Creuse les détails importants pour l'expérience utilisateur
 
 FINALISATION :
+AVANT de proposer de générer les spécifications, tu DOIS avoir demandé :
+- Le budget prévu (fourchette acceptable)
+- Le délai souhaité de réalisation
+
+C'est souvent la DERNIÈRE question avant de proposer la génération.
+
 Quand tu estimes avoir assez d'informations pour rédiger les spécifications, tu DOIS :
 1. Le signaler à l'utilisateur
 2. Lui proposer de générer le document de spécifications
@@ -456,6 +462,25 @@ export default function SpecRefiner() {
         }
     };
 
+    const regenerate = async () => {
+        if (confirm('Voulez-vous vraiment régénérer ? La spécification actuelle, les documents et l\'historique seront supprimés.')) {
+            // Abort any ongoing API request
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+                abortControllerRef.current = null;
+            }
+
+            // Reset session in Supabase
+            await resetSession();
+
+            // Reset local UI state
+            setChatFiles([]);
+            setInputMessage('');
+            setIsLoading(false);
+            setIsProcessingFiles(false);
+        }
+    };
+
     // ==================== Render ====================
 
     if (!isAuthenticated) {
@@ -630,13 +655,12 @@ export default function SpecRefiner() {
                             Généré le {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                         </p>
                         <button
-                            onClick={requestFinalSpec}
-                            disabled={isLoading}
-                            className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-600 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
+                            onClick={regenerate}
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
                             title="Régénérer les spécifications"
                         >
-                            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                            {isLoading ? 'Génération...' : 'Régénérer'}
+                            <RefreshCw className="w-4 h-4" />
+                            Régénérer
                         </button>
                     </div>
                     <MarkdownRenderer content={finalSpec} />
