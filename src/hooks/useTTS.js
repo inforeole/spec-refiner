@@ -112,7 +112,10 @@ export function useTTS() {
                 await audioRef.current.play();
                 setIsPlaying(true);
             } catch (playError) {
-                console.error('Audio play error (cached):', playError);
+                // NotAllowedError = browser blocked autoplay (no user interaction yet)
+                if (playError.name !== 'NotAllowedError') {
+                    console.error('Audio play error (cached):', playError);
+                }
                 setPlayingMessageId(null);
             }
             return;
@@ -142,7 +145,11 @@ export function useTTS() {
                 await audioRef.current.play();
                 setIsPlaying(true);
             } catch (playError) {
-                console.error('Audio play error:', playError);
+                // NotAllowedError = browser blocked autoplay (no user interaction yet)
+                // This is expected for auto-play, manual play will work after interaction
+                if (playError.name !== 'NotAllowedError') {
+                    console.error('Audio play error:', playError);
+                }
                 setPlayingMessageId(null);
             }
         } else {
