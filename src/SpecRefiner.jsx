@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Download, RotateCcw, Sparkles, CheckCircle2, Upload } from 'lucide-react';
+import { Download, RotateCcw, Sparkles, CheckCircle2, Upload, AlertCircle } from 'lucide-react';
 
 import {
     ChatInput,
@@ -9,18 +9,41 @@ import {
 } from './components';
 import { processFiles } from './utils/fileProcessing';
 import { downloadAsWord } from './utils/wordExport';
+import { useSession } from './hooks/useSession';
 
-// Welcome message shown on first load
-const WELCOME_MESSAGE = `👋 Salut ! Je suis l'assistant IA de Philippe, spécialisé en conception de produits SaaS.
+// Validation des réponses API - détecte les réponses incohérentes/corrompues
+const isValidResponse = (text) => {
+    if (!text || typeof text !== 'string' || text.trim().length < 10) {
+        return false;
+    }
 
-Je vais t'aider à transformer ton idée en spécifications claires et exploitables. Ça prend environ 10-15 minutes, et tu peux arrêter et reprendre quand tu veux (c'est sauvegardé).
+    // Mots français courants qui devraient apparaître dans une réponse normale
+    const frenchWords = ['le', 'la', 'de', 'et', 'tu', 'je', 'pour', 'que', 'est', 'un', 'une', 'en', 'ce', 'il', 'qui', 'ne', 'sur', 'se', 'pas', 'plus', 'par', 'son', 'avec', 'tout', 'faire', 'comme', 'ou', 'si', 'leur', 'y', 'mais', 'nous', 'cette', 'ont', 'bien', 'où', 'ces', 'sans', 'elle', 'peut', 'été', 'aussi', 'aux', 'être', 'fait', 'sont', 'quand', 'ton', 'ta', 'tes'];
 
-**Tu peux :**
-- Décrire ton projet dans la zone de texte
-- Glisser-déposer des fichiers (PDF, images, documents) n'importe où
-- Me poser des questions à tout moment
+    const words = text.toLowerCase().split(/\s+/);
 
-Alors, c'est quoi ton idée d'application ?`;
+    // Compte les mots français courants
+    const frenchWordCount = words.filter(w => frenchWords.includes(w)).length;
+    const frenchRatio = frenchWordCount / Math.max(words.length, 1);
+
+    // Une réponse française normale devrait avoir au moins 8% de mots courants
+    if (frenchRatio < 0.08 && words.length > 15) {
+        return false;
+    }
+
+    // Détecte les mots "garbage" (très longs sans accents français, ou collés bizarrement)
+    const suspiciousWords = words.filter(w =>
+        w.length > 18 || // Mots anormalement longs
+        (w.length > 12 && /[A-Z]/.test(w.slice(1))) || // camelCase au milieu
+        /[а-яА-Я]/.test(w) // Caractères cyrilliques
+    );
+
+    if (suspiciousWords.length > 2) {
+        return false;
+    }
+
+    return true;
+};
 
 const SYSTEM_PROMPT = `Tu es l'IA de Philippe, un expert en conception de produits SaaS.
 Ton ton est décontracté mais pro (tutoiement par défaut).
@@ -39,6 +62,8 @@ THÈMES À EXPLORER (en langage simple) :
 - Qui sont les utilisateurs ? Leurs profils, leurs habitudes
 - Quels problèmes concrets cette application résout ?
 - Comment ça se passe AUJOURD'HUI sans l'application ?
+- A-t-il étudié la concurrence ? Quels outils similaires existent ? Ce qu'il aime ou n'aime pas chez eux ?
+- A-t-il des documents de référence, maquettes, captures d'écran ou exemples à partager ? (rappeler qu'il peut glisser-déposer des fichiers)
 - Le parcours utilisateur idéal, étape par étape
 - Ce qu'on voit sur chaque écran, les actions possibles
 - Les cas particuliers ("et si l'utilisateur fait X ?")
@@ -111,16 +136,26 @@ export default function SpecRefiner() {
     const [passwordInput, setPasswordInput] = useState('');
     const [authError, setAuthError] = useState(false);
 
-    // App state
-    const [phase, setPhase] = useState('interview');
-    const [messages, setMessages] = useState([]);
+    // Session state from Supabase
+    const {
+        messages,
+        phase,
+        questionCount,
+        finalSpec,
+        isLoading: isSessionLoading,
+        connectionError,
+        updateMessages,
+        updatePhase,
+        updateQuestionCount,
+        updateFinalSpec,
+        resetSession
+    } = useSession();
+
+    // Local UI state
     const [inputMessage, setInputMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [finalSpec, setFinalSpec] = useState('');
-    const [questionCount, setQuestionCount] = useState(0);
     const [chatFiles, setChatFiles] = useState([]);
     const [isProcessingFiles, setIsProcessingFiles] = useState(false);
-    const [hasRestored, setHasRestored] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
 
     const messagesEndRef = useRef(null);
@@ -133,62 +168,6 @@ export default function SpecRefiner() {
             setIsAuthenticated(true);
         }
     }, []);
-
-    // Load from local storage on mount, or show welcome message
-    useEffect(() => {
-        const savedData = localStorage.getItem('spec-refiner-session');
-        if (savedData) {
-            try {
-                const parsed = JSON.parse(savedData);
-                if (parsed.messages && parsed.messages.length > 0) {
-                    setMessages(parsed.messages);
-                    setPhase(parsed.phase || 'interview');
-                    setQuestionCount(parsed.questionCount || 0);
-                } else {
-                    // No saved messages, show welcome
-                    setMessages([{ role: 'assistant', content: WELCOME_MESSAGE }]);
-                }
-            } catch (e) {
-                console.error('Failed to parse saved session', e);
-                setMessages([{ role: 'assistant', content: WELCOME_MESSAGE }]);
-            }
-        } else {
-            // First visit, show welcome message
-            setMessages([{ role: 'assistant', content: WELCOME_MESSAGE }]);
-        }
-        setHasRestored(true);
-    }, []);
-
-    // Save to local storage on change (excluding large image data)
-    useEffect(() => {
-        if (!hasRestored) return;
-
-        // Filter out base64 images from apiContent to avoid localStorage limits
-        const messagesForStorage = messages.map(m => {
-            if (!m.apiContent) return m;
-
-            // If apiContent is an array (multimodal), filter out images
-            if (Array.isArray(m.apiContent)) {
-                const textOnly = m.apiContent.filter(c => c.type === 'text');
-                // If only text remains, simplify to just the text string
-                if (textOnly.length === 1) {
-                    return { ...m, apiContent: textOnly[0].text };
-                } else if (textOnly.length > 1) {
-                    return { ...m, apiContent: textOnly };
-                }
-                // No text content, just use display content
-                return { ...m, apiContent: undefined };
-            }
-            return m;
-        });
-
-        const dataToSave = {
-            messages: messagesForStorage,
-            phase,
-            questionCount
-        };
-        localStorage.setItem('spec-refiner-session', JSON.stringify(dataToSave));
-    }, [messages, phase, questionCount, hasRestored]);
 
     // Scroll to bottom when messages change
     useEffect(() => {
@@ -338,7 +317,7 @@ export default function SpecRefiner() {
             const displayContent = userMessage + (currentChatFiles.length > 0 ? `\n\n[${currentChatFiles.length} fichier(s) joint(s)]` : '');
 
             // Store both display content and API content
-            setMessages(prev => [...prev, {
+            updateMessages(prev => [...prev, {
                 role: 'user',
                 content: displayContent,
                 apiContent: apiContent
@@ -351,15 +330,36 @@ export default function SpecRefiner() {
             }));
             conversationHistory.push({ role: 'user', content: apiContent });
 
-            const response = await callAPI(conversationHistory);
+            // Appel API avec retry si réponse incohérente
+            let response = await callAPI(conversationHistory);
+            let retryCount = 0;
+            const maxRetries = 2;
+
+            while (!isValidResponse(response) && retryCount < maxRetries) {
+                console.warn(`Réponse incohérente détectée (tentative ${retryCount + 1}/${maxRetries}), nouvelle tentative...`);
+                retryCount++;
+                response = await callAPI(conversationHistory);
+            }
+
+            // Si toujours incohérent après les retries, afficher un message d'erreur
+            if (!isValidResponse(response)) {
+                console.error('Réponse API invalide après retries:', response);
+                updateMessages(prev => [...prev, {
+                    role: 'assistant',
+                    content: '⚠️ Oups ! J\'ai eu un problème technique et ma réponse était incohérente. Peux-tu reformuler ta dernière réponse ou cliquer sur le bouton "Générer les specs" si tu penses qu\'on a assez d\'informations ?'
+                }]);
+                setIsLoading(false);
+                setIsProcessingFiles(false);
+                return;
+            }
 
             if (response.includes('[SPEC_COMPLETE]')) {
                 const specContent = response.replace('[SPEC_COMPLETE]', '').trim();
-                setFinalSpec(specContent);
-                setPhase('complete');
+                updateFinalSpec(specContent);
+                updatePhase('complete');
             } else {
-                setMessages(prev => [...prev, { role: 'assistant', content: response }]);
-                setQuestionCount(prev => prev + 1);
+                updateMessages(prev => [...prev, { role: 'assistant', content: response }]);
+                updateQuestionCount(prev => prev + 1);
             }
         } catch (error) {
             // Ignore abort errors (user reset)
@@ -367,7 +367,7 @@ export default function SpecRefiner() {
                 return;
             }
             console.error(error);
-            setMessages(prev => [...prev, { role: 'assistant', content: `Erreur: ${error.message}` }]);
+            updateMessages(prev => [...prev, { role: 'assistant', content: `❌ Erreur: ${error.message}` }]);
         }
 
         setIsLoading(false);
@@ -388,16 +388,32 @@ export default function SpecRefiner() {
         });
 
         try {
-            const response = await callAPI(conversationHistory);
+            // Appel API avec retry si réponse incohérente
+            let response = await callAPI(conversationHistory);
+            let retryCount = 0;
+            const maxRetries = 2;
+
+            while (!isValidResponse(response) && retryCount < maxRetries) {
+                console.warn(`Réponse spec incohérente (tentative ${retryCount + 1}/${maxRetries}), nouvelle tentative...`);
+                retryCount++;
+                response = await callAPI(conversationHistory);
+            }
+
+            if (!isValidResponse(response)) {
+                alert('La génération des spécifications a échoué (réponse incohérente). Veuillez réessayer.');
+                setIsLoading(false);
+                return;
+            }
+
             const specContent = response.replace('[SPEC_COMPLETE]', '').trim();
-            setFinalSpec(specContent);
-            setPhase('complete');
+            updateFinalSpec(specContent);
+            updatePhase('complete');
         } catch (error) {
             // Ignore abort errors (user reset)
             if (error.name === 'AbortError') {
                 return;
             }
-            alert(`Erreur: ${error.message}`);
+            alert(`❌ Erreur: ${error.message}`);
         }
 
         setIsLoading(false);
@@ -407,7 +423,7 @@ export default function SpecRefiner() {
         downloadAsWord(finalSpec, 'specifications.docx');
     };
 
-    const reset = () => {
+    const reset = async () => {
         if (confirm('Voulez-vous vraiment recommencer ? Tout l\'historique sera effacé.')) {
             // Abort any ongoing API request
             if (abortControllerRef.current) {
@@ -415,16 +431,12 @@ export default function SpecRefiner() {
                 abortControllerRef.current = null;
             }
 
-            // Clear storage
-            localStorage.removeItem('spec-refiner-session');
+            // Reset session in Supabase
+            await resetSession();
 
-            // Reset all state
-            setPhase('interview');
+            // Reset local UI state
             setChatFiles([]);
-            setMessages([{ role: 'assistant', content: WELCOME_MESSAGE }]);
             setInputMessage('');
-            setFinalSpec('');
-            setQuestionCount(0);
             setIsLoading(false);
             setIsProcessingFiles(false);
         }
@@ -440,6 +452,37 @@ export default function SpecRefiner() {
                 value={passwordInput}
                 onChange={setPasswordInput}
             />
+        );
+    }
+
+    // Show loading while session is being restored from Supabase
+    if (isSessionLoading) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-12 h-12 border-4 border-violet-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-white text-lg">Chargement de la session...</p>
+                </div>
+            </div>
+        );
+    }
+
+    // Show error if Supabase connection failed
+    if (connectionError) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+                <div className="bg-slate-800/50 backdrop-blur border border-red-500/50 rounded-2xl p-8 max-w-md text-center">
+                    <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+                    <h1 className="text-xl font-bold text-white mb-2">Erreur de connexion</h1>
+                    <p className="text-slate-400 mb-4">{connectionError}</p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="bg-violet-600 hover:bg-violet-500 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+                    >
+                        Réessayer
+                    </button>
+                </div>
+            </div>
         );
     }
 

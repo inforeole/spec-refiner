@@ -12,6 +12,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.90.1",
     "docx": "^9.5.1",
     "file-saver": "^2.0.5",
     "lucide-react": "^0.309.0",
