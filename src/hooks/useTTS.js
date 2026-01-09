@@ -13,7 +13,7 @@ export function useTTS() {
     const [isLoading, setIsLoading] = useState(false);
     const [ttsAvailable, setTtsAvailable] = useState(true);
     const [autoPlayEnabled, setAutoPlayEnabled] = useState(() => {
-        return localStorage.getItem(STORAGE_KEY) === 'true';
+        return localStorage.getItem(STORAGE_KEY) !== 'false';
     });
 
     const audioRef = useRef(new Audio());
