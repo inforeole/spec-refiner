@@ -12,19 +12,32 @@ let saveTimeout = null;
 const SAVE_DEBOUNCE_MS = 1000;
 
 /**
- * Filter messages for storage (remove large base64 images to save space)
+ * Filter messages for storage
+ * - Keep text content
+ * - Keep Storage URLs (already uploaded images)
+ * - Remove base64 images (fallback if upload failed)
  */
 function filterMessagesForStorage(messages) {
     return messages.map(m => {
         if (!m.apiContent) return m;
         if (Array.isArray(m.apiContent)) {
-            const textOnly = m.apiContent.filter(c => c.type === 'text');
-            if (textOnly.length === 1) {
-                return { ...m, apiContent: textOnly[0].text };
-            } else if (textOnly.length > 1) {
-                return { ...m, apiContent: textOnly };
+            // Keep text and storage URLs, filter out base64
+            const filtered = m.apiContent.filter(c => {
+                if (c.type === 'text') return true;
+                if (c.type === 'image_url' && c.image_url?.url) {
+                    // Keep if it's a Storage URL, not base64
+                    return !c.image_url.url.startsWith('data:');
+                }
+                return false;
+            });
+
+            if (filtered.length === 0) {
+                return { ...m, apiContent: undefined };
             }
-            return { ...m, apiContent: undefined };
+            if (filtered.length === 1 && filtered[0].type === 'text') {
+                return { ...m, apiContent: filtered[0].text };
+            }
+            return { ...m, apiContent: filtered };
         }
         return m;
     });

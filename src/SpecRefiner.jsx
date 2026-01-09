@@ -10,6 +10,7 @@ import {
 import { processFiles } from './utils/fileProcessing';
 import { downloadAsWord } from './utils/wordExport';
 import { useSession } from './hooks/useSession';
+import { uploadImage } from './services/imageService';
 
 // Validation des réponses API - détecte les réponses incohérentes/corrompues
 const isValidResponse = (text) => {
@@ -303,13 +304,25 @@ export default function SpecRefiner() {
                     apiContent.push({ type: 'text', text: textContent });
                 }
 
+                // Upload images to Supabase Storage for persistence
                 const imageFiles = processedFiles.filter(f => f.type === 'image');
-                imageFiles.forEach(f => {
-                    apiContent.push({
-                        type: 'image_url',
-                        image_url: { url: f.content }
-                    });
-                });
+                for (const f of imageFiles) {
+                    const { url, error } = await uploadImage(f.content, f.name);
+                    if (url) {
+                        // Use Storage URL (persisted)
+                        apiContent.push({
+                            type: 'image_url',
+                            image_url: { url }
+                        });
+                    } else {
+                        // Fallback to base64 if upload fails (not persisted)
+                        console.warn('Image upload failed:', error);
+                        apiContent.push({
+                            type: 'image_url',
+                            image_url: { url: f.content }
+                        });
+                    }
+                }
             } else {
                 apiContent = userMessage; // Simple string for text-only messages
             }
