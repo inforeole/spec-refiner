@@ -5,7 +5,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { loadSession, saveSession, clearSession, checkSupabaseConnection } from '../services/sessionService';
 
-const WELCOME_MESSAGE = `[AUDIO]Salut ! Je suis l'assistant de Phil, d'info-ré-ole. Je vais t'aider à définir ton projet. Décris-moi ton idée ![/AUDIO]
+const WELCOME_MESSAGE = `[AUDIO]Salut ! Je suis l'assistant de Phil. Décris-moi ton projet ![/AUDIO]
 
 Salut ! 👋 Je suis l'assistant IA de Phil ([inforeole.fr](https://inforeole.fr)), et je vais t'aider à affiner ton cahier des charges.
 
