@@ -6,6 +6,8 @@ import DOMPurify from 'dompurify';
  */
 export default function MarkdownRenderer({ content }) {
     const renderMarkdown = (text) => {
+        // Strip [AUDIO]...[/AUDIO] tags (used for TTS only)
+        text = text.replace(/\[AUDIO\][\s\S]*?\[\/AUDIO\]\s*/gi, '');
         const lines = text.split('\n');
         const elements = [];
         let inList = false;

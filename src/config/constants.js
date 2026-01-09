@@ -24,3 +24,12 @@ export const INTERVIEW_CONFIG = {
 export const MARKERS = {
     SPEC_COMPLETE: '[SPEC_COMPLETE]'
 };
+
+// Text-to-Speech (Inworld AI)
+export const TTS_CONFIG = {
+    ENDPOINT: 'https://api.inworld.ai/tts/v1/voice',
+    MODEL: 'inworld-tts-1-max',
+    VOICE_ID: 'default-o-lizv8yves-5uhgzcrjog__vanessa',
+    SPEAKING_RATE: 1,
+    TEMPERATURE: 1.1
+};

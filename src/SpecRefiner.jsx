@@ -1,28 +1,21 @@
-import { useState, useRef, useEffect } from 'react';
-import { Download, RotateCcw, RefreshCw, Sparkles, CheckCircle2, Upload, AlertCircle, MessageCircle } from 'lucide-react';
+import { useRef, useEffect } from 'react';
+import { AlertCircle } from 'lucide-react';
 
-import {
-    ChatInput,
-    LoginForm,
-    MarkdownRenderer,
-    MessageList
-} from './components';
-import { processFiles } from './utils/fileProcessing';
+import { LoginForm, InterviewPhase, CompletePhase } from './components';
 import { downloadAsWord } from './utils/wordExport';
 import { useSession } from './hooks/useSession';
 import { useDragDrop } from './hooks/useDragDrop';
-import { uploadImage } from './services/imageService';
-import { INTERVIEW_CONFIG, MARKERS } from './config/constants';
-import { SYSTEM_PROMPT } from './prompts/systemPrompt';
-import { callAPIWithRetry } from './services/apiService';
+import { useAuth } from './hooks/useAuth';
+import { useChatInput } from './hooks/useChatInput';
+import { useInterviewChat } from './hooks/useInterviewChat';
+import { useTTS } from './hooks/useTTS';
 
 export default function SpecRefiner() {
-    // Auth state
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [passwordInput, setPasswordInput] = useState('');
-    const [authError, setAuthError] = useState(false);
+    // ==================== Hooks ====================
 
-    // Session state from Supabase
+    const { isAuthenticated, passwordInput, setPasswordInput, authError, handleLogin } = useAuth();
+
+    const sessionHook = useSession();
     const {
         messages,
         phase,
@@ -30,222 +23,82 @@ export default function SpecRefiner() {
         finalSpec,
         isLoading: isSessionLoading,
         connectionError,
-        updateMessages,
         updatePhase,
-        updateQuestionCount,
-        updateFinalSpec,
         resetSession
-    } = useSession();
+    } = sessionHook;
 
-    // Local UI state
-    const [inputMessage, setInputMessage] = useState('');
-    const [isLoading, setIsLoading] = useState(false);
-    const [chatFiles, setChatFiles] = useState([]);
-    const [isProcessingFiles, setIsProcessingFiles] = useState(false);
+    const {
+        inputMessage,
+        setInputMessage,
+        chatFiles,
+        isProcessingFiles,
+        handleFileSelect,
+        removeFile,
+        clearInput,
+        addFiles,
+        processCurrentFiles
+    } = useChatInput();
 
-    // Drag & drop
+    const { isLoading, sendMessage, requestFinalSpec, abortRequest } = useInterviewChat(sessionHook);
+
     const { isDragging, dragHandlers } = useDragDrop({
-        onDrop: (files) => setChatFiles(prev => [...prev, ...files]),
+        onDrop: addFiles,
         disabled: isLoading
     });
 
-    const messagesEndRef = useRef(null);
-    const abortControllerRef = useRef(null);
+    const {
+        isPlaying: isPlayingAudio,
+        isLoading: isLoadingAudio,
+        playingMessageId,
+        autoPlayEnabled,
+        play: playAudio,
+        toggleAutoPlay,
+        preloadAudio
+    } = useTTS();
 
-    // Check auth on mount
-    useEffect(() => {
-        const sessionAuth = sessionStorage.getItem('spec-refiner-auth');
-        if (sessionAuth === 'true') {
-            setIsAuthenticated(true);
-        }
-    }, []);
+    const messagesEndRef = useRef(null);
+    const lastMessageCountRef = useRef(messages.length);
 
     // Scroll to bottom when messages change
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
+    // Preload and auto-play TTS for new assistant messages
+    useEffect(() => {
+        if (messages.length === 0) return;
+
+        // Check if a new message was added
+        if (messages.length > lastMessageCountRef.current) {
+            const lastMessage = messages[messages.length - 1];
+            if (lastMessage.role === 'assistant') {
+                const messageId = messages.length - 1;
+                // Preload audio in background
+                preloadAudio(lastMessage.content, messageId);
+                // Auto-play if enabled
+                if (autoPlayEnabled) {
+                    playAudio(lastMessage.content, messageId);
+                }
+            }
+        }
+        lastMessageCountRef.current = messages.length;
+    }, [messages, autoPlayEnabled, playAudio, preloadAudio]);
+
     // ==================== Handlers ====================
 
-    const handleLogin = (e) => {
-        e.preventDefault();
-        // Strip quotes and trim in case .env has quoted value
-        const correctPassword = (import.meta.env.VITE_APP_PASSWORD || '')
-            .replace(/^["']|["']$/g, '')
-            .trim();
-        if (passwordInput === correctPassword) {
-            setIsAuthenticated(true);
-            setAuthError(false);
-            sessionStorage.setItem('spec-refiner-auth', 'true');
-        } else {
-            setAuthError(true);
-        }
-    };
-
-    const handleFileSelect = (e) => {
-        const selectedFiles = Array.from(e.target.files || e.dataTransfer?.files || []);
-        setChatFiles(prev => [...prev, ...selectedFiles]);
-    };
-
-    const removeFile = (index) => {
-        setChatFiles(prev => prev.filter((_, i) => i !== index));
-    };
-
-    // ==================== API ====================
-
-    const buildConversationHistory = (additionalMessage = null) => {
-        // Inclut le system prompt au début
-        const history = [
-            { role: 'system', content: SYSTEM_PROMPT },
-            ...messages.map(m => ({
-                role: m.role,
-                content: m.apiContent || m.content
-            }))
-        ];
-        if (additionalMessage) {
-            history.push(additionalMessage);
-        }
-        return history;
-    };
-
-    const callAPI = async (conversationHistory) => {
-        // Create new AbortController for this request
-        abortControllerRef.current = new AbortController();
-        return callAPIWithRetry({
-            messages: conversationHistory,
-            signal: abortControllerRef.current.signal
-        });
-    };
-
-    const handleSpecComplete = (response) => {
-        const specContent = response.replace(MARKERS.SPEC_COMPLETE, '').trim();
-        updateFinalSpec(specContent);
-        updatePhase('complete');
-    };
-
-    // ==================== Chat Logic ====================
-
-    const sendMessage = async () => {
+    const handleSendMessage = async () => {
         if ((!inputMessage.trim() && chatFiles.length === 0) || isLoading) return;
 
-        const userMessage = inputMessage;
-        const currentChatFiles = [...chatFiles];
+        const messageText = inputMessage;
+        const currentFiles = [...chatFiles];
 
-        setInputMessage('');
-        setChatFiles([]);
-        setIsLoading(true);
+        clearInput();
 
-        try {
-            let apiContent = [];
+        const processedFiles = currentFiles.length > 0
+            ? await processCurrentFiles(currentFiles)
+            : [];
 
-            if (currentChatFiles.length > 0) {
-                setIsProcessingFiles(true);
-                const processedFiles = await processFiles(currentChatFiles);
-                setIsProcessingFiles(false);
-
-                let textContent = userMessage;
-
-                const textFiles = processedFiles.filter(f => f.type === 'text');
-                if (textFiles.length > 0) {
-                    textContent += '\n\nDocuments attachés :';
-                    textFiles.forEach(f => {
-                        textContent += `\n\n--- ${f.name} ---\n${f.content}`;
-                    });
-                }
-
-                if (textContent.trim()) {
-                    apiContent.push({ type: 'text', text: textContent });
-                }
-
-                // Upload images to Supabase Storage for persistence
-                const imageFiles = processedFiles.filter(f => f.type === 'image');
-                for (const f of imageFiles) {
-                    const { url, error } = await uploadImage(f.content, f.name);
-                    if (url) {
-                        // Use Storage URL (persisted)
-                        apiContent.push({
-                            type: 'image_url',
-                            image_url: { url }
-                        });
-                    } else {
-                        // Fallback to base64 if upload fails (not persisted)
-                        console.warn('Image upload failed:', error);
-                        apiContent.push({
-                            type: 'image_url',
-                            image_url: { url: f.content }
-                        });
-                    }
-                }
-            } else {
-                apiContent = userMessage; // Simple string for text-only messages
-            }
-
-            const displayContent = userMessage + (currentChatFiles.length > 0 ? `\n\n[${currentChatFiles.length} fichier(s) joint(s)]` : '');
-
-            // Store both display content and API content
-            updateMessages(prev => [...prev, {
-                role: 'user',
-                content: displayContent,
-                apiContent: apiContent
-            }]);
-
-            const conversationHistory = buildConversationHistory({ role: 'user', content: apiContent });
-            const { response, isValid } = await callAPI(conversationHistory);
-
-            if (!isValid) {
-                console.error('Réponse API invalide après retries:', response);
-                updateMessages(prev => [...prev, {
-                    role: 'assistant',
-                    content: '⚠️ Oups ! J\'ai eu un problème technique et ma réponse était incohérente. Peux-tu reformuler ta dernière réponse ou cliquer sur le bouton "Générer les specs" si tu penses qu\'on a assez d\'informations ?'
-                }]);
-                setIsLoading(false);
-                setIsProcessingFiles(false);
-                return;
-            }
-
-            if (response.includes(MARKERS.SPEC_COMPLETE)) {
-                handleSpecComplete(response);
-            } else {
-                updateMessages(prev => [...prev, { role: 'assistant', content: response }]);
-                updateQuestionCount(prev => prev + 1);
-            }
-        } catch (error) {
-            // Ignore abort errors (user reset)
-            if (error.name === 'AbortError') {
-                return;
-            }
-            console.error(error);
-            updateMessages(prev => [...prev, { role: 'assistant', content: `❌ Erreur: ${error.message}` }]);
-        }
-
-        setIsLoading(false);
-        setIsProcessingFiles(false);
-    };
-
-    const requestFinalSpec = async () => {
-        setIsLoading(true);
-
-        const conversationHistory = buildConversationHistory({
-            role: 'user',
-            content: 'Génère maintenant la spécification finale complète avec toutes les informations recueillies. IMPORTANT: Commence le document par 2 phrases qui résument clairement l\'objectif du projet et le problème qu\'il résout. Réponds avec [SPEC_COMPLETE] suivi du document.'
-        });
-
-        try {
-            const { response, isValid } = await callAPI(conversationHistory);
-
-            if (!isValid) {
-                alert('La génération des spécifications a échoué (réponse incohérente). Veuillez réessayer.');
-                setIsLoading(false);
-                return;
-            }
-
-            handleSpecComplete(response);
-        } catch (error) {
-            if (error.name === 'AbortError') return;
-            alert(`Erreur: ${error.message}`);
-        }
-
-        setIsLoading(false);
+        await sendMessage(messageText, processedFiles);
     };
 
     const downloadSpec = () => {
@@ -255,20 +108,9 @@ export default function SpecRefiner() {
     const resetWithConfirmation = async (confirmMessage) => {
         if (!confirm(confirmMessage)) return;
 
-        // Abort any ongoing API request
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-            abortControllerRef.current = null;
-        }
-
-        // Reset session in Supabase
+        abortRequest();
         await resetSession();
-
-        // Reset local UI state
-        setChatFiles([]);
-        setInputMessage('');
-        setIsLoading(false);
-        setIsProcessingFiles(false);
+        clearInput();
     };
 
     const reset = () => resetWithConfirmation('Voulez-vous vraiment recommencer ? Tout l\'historique sera effacé.');
@@ -320,154 +162,49 @@ export default function SpecRefiner() {
 
     if (phase === 'interview') {
         return (
-            <div
-                className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex flex-col relative"
-                {...dragHandlers}
-            >
-                {/* Drag overlay */}
-                {isDragging && (
-                    <div className="absolute inset-0 bg-violet-900/80 backdrop-blur-sm z-50 flex items-center justify-center">
-                        <div className="bg-slate-800 border-2 border-dashed border-violet-500 rounded-2xl p-12 text-center">
-                            <Upload className="w-16 h-16 text-violet-400 mx-auto mb-4" />
-                            <p className="text-white text-xl font-medium">Dépose tes fichiers ici</p>
-                            <p className="text-slate-400 text-sm mt-2">Images, PDF, Word, texte...</p>
-                        </div>
-                    </div>
-                )}
-
-                {/* Header */}
-                <div className="bg-slate-800/80 backdrop-blur border-b border-slate-700 px-4 py-3">
-                    <div className="max-w-3xl mx-auto flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-violet-600 rounded-xl flex items-center justify-center">
-                                <Sparkles className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                                <h1 className="text-white font-semibold">Spec Refiner</h1>
-                                <p className="text-slate-400 text-sm">
-                                    {questionCount === 0 ? 'Prêt à démarrer' : `${questionCount} échange${questionCount > 1 ? 's' : ''}`}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex gap-2">
-                            {finalSpec && (
-                                <button
-                                    onClick={() => updatePhase('complete')}
-                                    className="bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
-                                >
-                                    <Download className="w-4 h-4" />
-                                    Voir les specs
-                                </button>
-                            )}
-                            {questionCount >= INTERVIEW_CONFIG.MIN_QUESTIONS_BEFORE_SPEC && !finalSpec && (
-                                <button
-                                    onClick={requestFinalSpec}
-                                    disabled={isLoading}
-                                    className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
-                                >
-                                    <CheckCircle2 className="w-4 h-4" />
-                                    Générer les specs
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                </div>
-
-                <MessageList
-                    messages={messages}
-                    isLoading={isLoading}
-                    ref={messagesEndRef}
-                />
-
-                <ChatInput
-                    value={inputMessage}
-                    onChange={setInputMessage}
-                    onSubmit={sendMessage}
-                    files={chatFiles}
-                    onFileSelect={handleFileSelect}
-                    onFileRemove={removeFile}
-                    disabled={isLoading || isProcessingFiles}
-                    isProcessingFiles={isProcessingFiles}
-                />
-
-                {/* Footer */}
-                <div className="py-3 flex justify-center border-t border-slate-800">
-                    <button
-                        onClick={reset}
-                        className="text-slate-500 hover:text-slate-300 text-sm flex items-center gap-2 transition-colors"
-                    >
-                        <RotateCcw className="w-4 h-4" />
-                        Recommencer un nouveau projet
-                    </button>
-                </div>
-            </div>
+            <InterviewPhase
+                // Session data
+                messages={messages}
+                questionCount={questionCount}
+                finalSpec={finalSpec}
+                // Loading states
+                isLoading={isLoading}
+                isProcessingFiles={isProcessingFiles}
+                // Drag & drop
+                isDragging={isDragging}
+                dragHandlers={dragHandlers}
+                // Chat input
+                inputMessage={inputMessage}
+                setInputMessage={setInputMessage}
+                chatFiles={chatFiles}
+                // Handlers
+                onSendMessage={handleSendMessage}
+                onRequestSpec={requestFinalSpec}
+                onFileSelect={handleFileSelect}
+                onFileRemove={removeFile}
+                onViewSpec={() => updatePhase('complete')}
+                onReset={reset}
+                // TTS
+                onPlayAudio={playAudio}
+                playingMessageId={playingMessageId}
+                isPlayingAudio={isPlayingAudio}
+                isLoadingAudio={isLoadingAudio}
+                autoPlayEnabled={autoPlayEnabled}
+                onToggleAutoPlay={toggleAutoPlay}
+                // Refs
+                messagesEndRef={messagesEndRef}
+            />
         );
     }
 
     // Phase: complete
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
-            <div className="max-w-4xl mx-auto">
-                {/* Header */}
-                <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center">
-                            <CheckCircle2 className="w-6 h-6 text-white" />
-                        </div>
-                        <div>
-                            <h1 className="text-2xl font-bold text-white">Spécifications finales</h1>
-                            <p className="text-slate-400">Prêtes pour le développement</p>
-                        </div>
-                    </div>
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => updatePhase('interview')}
-                            className="bg-slate-700 hover:bg-slate-600 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
-                            title="Voir l'historique de la conversation"
-                        >
-                            <MessageCircle className="w-4 h-4" />
-                            Historique
-                        </button>
-                        <button
-                            onClick={downloadSpec}
-                            className="bg-violet-600 hover:bg-violet-500 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
-                        >
-                            <Download className="w-4 h-4" />
-                            Spécifications
-                        </button>
-                    </div>
-                </div>
-
-                {/* Spec content */}
-                <div className="bg-slate-800/50 backdrop-blur border border-slate-700 rounded-2xl p-8">
-                    {/* Date and regenerate button */}
-                    <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-700">
-                        <p className="text-slate-400 text-sm">
-                            Généré le {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                        <button
-                            onClick={regenerate}
-                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
-                            title="Régénérer les spécifications"
-                        >
-                            <RefreshCw className="w-4 h-4" />
-                            Régénérer
-                        </button>
-                    </div>
-                    <MarkdownRenderer content={finalSpec} />
-                </div>
-
-                {/* Footer */}
-                <div className="mt-6 flex justify-center">
-                    <button
-                        onClick={reset}
-                        className="text-slate-500 hover:text-slate-300 text-sm flex items-center gap-2 transition-colors"
-                    >
-                        <RotateCcw className="w-4 h-4" />
-                        Recommencer un nouveau projet
-                    </button>
-                </div>
-            </div>
-        </div>
+        <CompletePhase
+            finalSpec={finalSpec}
+            onBackToInterview={() => updatePhase('interview')}
+            onRegenerate={regenerate}
+            onDownload={downloadSpec}
+            onReset={reset}
+        />
     );
 }

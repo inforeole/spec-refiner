@@ -1,8 +1,15 @@
 import { forwardRef } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Volume2, Pause, Loader } from 'lucide-react';
 import MarkdownRenderer from './MarkdownRenderer';
 
-const MessageList = forwardRef(function MessageList({ messages, isLoading }, ref) {
+const MessageList = forwardRef(function MessageList({
+    messages,
+    isLoading,
+    onPlayAudio,
+    playingMessageId,
+    isPlayingAudio,
+    isLoadingAudio
+}, ref) {
     return (
         <div className="flex-1 overflow-y-auto p-4">
             <div className="max-w-3xl mx-auto space-y-4">
@@ -23,7 +30,24 @@ const MessageList = forwardRef(function MessageList({ messages, isLoading }, ref
                                 <div className="text-violet-400 text-xs font-medium mb-2">VOTRE IDÉE</div>
                             )}
                             {msg.role === 'assistant' ? (
-                                <MarkdownRenderer content={msg.content} />
+                                <>
+                                    <MarkdownRenderer content={msg.content} />
+                                    {onPlayAudio && (
+                                        <button
+                                            onClick={() => onPlayAudio(msg.content, idx)}
+                                            className="mt-2 p-1.5 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-violet-400 transition-colors"
+                                            title={playingMessageId === idx ? 'Arrêter' : 'Écouter'}
+                                        >
+                                            {isLoadingAudio && playingMessageId === idx ? (
+                                                <Loader className="w-4 h-4 animate-spin" />
+                                            ) : isPlayingAudio && playingMessageId === idx ? (
+                                                <Pause className="w-4 h-4" />
+                                            ) : (
+                                                <Volume2 className="w-4 h-4" />
+                                            )}
+                                        </button>
+                                    )}
+                                </>
                             ) : (
                                 <div className="whitespace-pre-wrap">{msg.content}</div>
                             )}
