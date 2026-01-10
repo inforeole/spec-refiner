@@ -1,8 +1,9 @@
 import { useState, useRef, useCallback } from 'react';
 import { callAPIWithRetry } from '../services/apiService';
 import { uploadImage } from '../services/imageService';
+import { generateFileSummary } from '../services/summaryService';
 import { MARKERS } from '../config/constants';
-import { SYSTEM_PROMPT } from '../prompts/systemPrompt';
+import { getSystemPrompt } from '../prompts/systemPrompt';
 
 /**
  * Hook pour gérer la logique de conversation avec l'API
@@ -12,6 +13,7 @@ import { SYSTEM_PROMPT } from '../prompts/systemPrompt';
 export function useInterviewChat(sessionHook) {
     const {
         messages,
+        finalSpec,
         updateMessages,
         updatePhase,
         updateQuestionCount,
@@ -26,7 +28,7 @@ export function useInterviewChat(sessionHook) {
      */
     const buildConversationHistory = useCallback((additionalMessage = null) => {
         const history = [
-            { role: 'system', content: SYSTEM_PROMPT },
+            { role: 'system', content: getSystemPrompt() },
             ...messages.map(m => ({
                 role: m.role,
                 content: m.apiContent || m.content
@@ -50,13 +52,45 @@ export function useInterviewChat(sessionHook) {
     }, []);
 
     /**
+     * Nettoie le contenu du spec des blocs audio et autres artefacts
+     */
+    const cleanSpecContent = (content) => {
+        let cleaned = content
+            // Supprime les blocs [AUDIO]...[/AUDIO]
+            .replace(/\[AUDIO\][\s\S]*?\[\/AUDIO\]/gi, '')
+            .trim();
+
+        // Cherche le début réel du document (premier titre markdown # ou "Cahier des charges")
+        // L'IA peut ajouter du texte de conversation avant le document
+        const titleMatch = cleaned.match(/^(#\s|Cahier des charges)/m);
+        if (titleMatch && titleMatch.index > 0) {
+            // Garde seulement à partir du titre
+            cleaned = cleaned.substring(titleMatch.index);
+        }
+
+        // Supprime les lignes vides multiples résultantes
+        return cleaned
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+    };
+
+    /**
      * Gère la complétion du spec
      */
     const handleSpecComplete = useCallback((response) => {
-        const specContent = response.replace(MARKERS.SPEC_COMPLETE, '').trim();
+        const rawSpec = response.replace(MARKERS.SPEC_COMPLETE, '').trim();
+        const specContent = cleanSpecContent(rawSpec);
+
+        // Ajouter un message à l'historique pour que l'IA sache que les specs ont été générées
+        // (important si l'utilisateur revient sur l'interview pour faire des modifications)
+        updateMessages(prev => [...prev, {
+            role: 'assistant',
+            content: '[AUDIO]Voilà, j\'ai généré le document de spécifications ![/AUDIO]\n\n✅ **Les spécifications ont été générées et sont maintenant affichées.**\n\nSi tu veux apporter des modifications, tu pourras revenir me voir.'
+        }]);
+
         updateFinalSpec(specContent);
         updatePhase('complete');
-    }, [updateFinalSpec, updatePhase]);
+    }, [updateMessages, updateFinalSpec, updatePhase]);
 
     /**
      * Envoie un message avec fichiers optionnels
@@ -110,8 +144,23 @@ export function useInterviewChat(sessionHook) {
                 apiContent = messageText;
             }
 
-            const fileCount = processedFiles.length;
-            const displayContent = messageText + (fileCount > 0 ? `\n\n[${fileCount} fichier(s) joint(s)]` : '');
+            // Generate summary for the attached file (limited to 1 file)
+            let fileSummary = null;
+            if (processedFiles.length > 0) {
+                const file = processedFiles[0];
+                if (file.type === 'image') {
+                    fileSummary = 'Image';
+                } else {
+                    try {
+                        fileSummary = await generateFileSummary(file.content, file.name);
+                    } catch (error) {
+                        console.warn('Failed to generate file summary:', error);
+                        fileSummary = file.name; // Fallback to filename
+                    }
+                }
+            }
+
+            const displayContent = messageText + (fileSummary ? `\n\n[${fileSummary}]` : '');
 
             updateMessages(prev => [...prev, {
                 role: 'user',
@@ -132,10 +181,23 @@ export function useInterviewChat(sessionHook) {
                 return false;
             }
 
-            if (response.includes(MARKERS.SPEC_COMPLETE)) {
+            // Si l'IA génère [SPEC_COMPLETE] mais qu'on a déjà des specs,
+            // c'est qu'on est en mode modification - ignorer et continuer la conversation
+            const hasSpecMarker = response.includes(MARKERS.SPEC_COMPLETE);
+            const isModificationMode = !!finalSpec;
+
+            if (hasSpecMarker && !isModificationMode) {
+                // Première génération de specs
                 handleSpecComplete(response);
             } else {
-                updateMessages(prev => [...prev, { role: 'assistant', content: response }]);
+                // Conversation normale OU mode modification (ignorer [SPEC_COMPLETE])
+                let cleanResponse = response;
+                if (hasSpecMarker && isModificationMode) {
+                    // Extraire le texte avant [SPEC_COMPLETE] s'il y en a
+                    const beforeMarker = response.split(MARKERS.SPEC_COMPLETE)[0].trim();
+                    cleanResponse = beforeMarker || 'C\'est noté ! Dis-moi si tu veux modifier autre chose, ou clique sur "Régénérer les specs" pour mettre à jour le document.';
+                }
+                updateMessages(prev => [...prev, { role: 'assistant', content: cleanResponse }]);
                 updateQuestionCount(prev => prev + 1);
             }
 
@@ -150,7 +212,7 @@ export function useInterviewChat(sessionHook) {
             setIsLoading(false);
             return false;
         }
-    }, [isLoading, buildConversationHistory, callAPI, updateMessages, handleSpecComplete, updateQuestionCount]);
+    }, [isLoading, finalSpec, buildConversationHistory, callAPI, updateMessages, handleSpecComplete, updateQuestionCount]);
 
     /**
      * Demande la génération du spec final
@@ -160,7 +222,7 @@ export function useInterviewChat(sessionHook) {
 
         const conversationHistory = buildConversationHistory({
             role: 'user',
-            content: 'Génère maintenant la spécification finale complète avec toutes les informations recueillies. IMPORTANT: Commence le document par 2 phrases qui résument clairement l\'objectif du projet et le problème qu\'il résout. Réponds avec [SPEC_COMPLETE] suivi du document.'
+            content: 'Génère maintenant la spécification finale complète avec toutes les informations recueillies. IMPORTANT: Commence le document par 2 phrases qui résument clairement l\'objectif du projet et le problème qu\'il résout. Réponds avec [SPEC_COMPLETE] suivi du document. ATTENTION: Pour ce document final, N\'UTILISE PAS de bloc [AUDIO] - c\'est un document écrit, pas un message conversationnel.'
         });
 
         try {

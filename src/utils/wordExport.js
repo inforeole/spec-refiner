@@ -5,9 +5,90 @@ import {
     HeadingLevel,
     AlignmentType,
     Packer,
-    BorderStyle
+    BorderStyle,
+    Table,
+    TableRow,
+    TableCell,
+    WidthType,
+    VerticalAlign
 } from 'docx';
 import { saveAs } from 'file-saver';
+
+/**
+ * Check if a line is a markdown table row
+ */
+function isTableRow(line) {
+    return line.trim().startsWith('|') && line.trim().endsWith('|');
+}
+
+/**
+ * Check if a line is a table separator (|---|---|)
+ */
+function isTableSeparator(line) {
+    return /^\|[\s\-:|]+\|$/.test(line.trim());
+}
+
+/**
+ * Parse a table row into cells
+ */
+function parseTableCells(row) {
+    return row
+        .split('|')
+        .slice(1, -1) // Remove empty strings from start/end
+        .map(cell => cell.trim());
+}
+
+/**
+ * Create a docx Table from markdown table rows
+ */
+function createTable(tableRows) {
+    if (tableRows.length === 0) return null;
+
+    const headerCells = parseTableCells(tableRows[0]);
+    const dataRows = tableRows.slice(1).filter(row => !isTableSeparator(row));
+
+    const rows = [
+        // Header row
+        new TableRow({
+            children: headerCells.map(cell => {
+                // Strip ** from header cells and parse inline formatting
+                const cleanCell = cell.replace(/^\*\*|\*\*$/g, '');
+                return new TableCell({
+                    children: [
+                        new Paragraph({
+                            children: [new TextRun({ text: cleanCell, bold: true })],
+                            spacing: { after: 0 }
+                        })
+                    ],
+                    shading: { fill: 'E8E8E8' },
+                    verticalAlign: VerticalAlign.CENTER
+                });
+            })
+        }),
+        // Data rows
+        ...dataRows.map(row =>
+            new TableRow({
+                children: parseTableCells(row).map(cell =>
+                    new TableCell({
+                        children: [
+                            new Paragraph({
+                                children: parseInlineFormatting(cell),
+                                spacing: { after: 0 }
+                            })
+                        ],
+                        verticalAlign: VerticalAlign.CENTER
+                    })
+                )
+            })
+        )
+    ];
+
+    return new Table({
+        rows,
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        columnWidths: Array(headerCells.length).fill(Math.floor(9000 / headerCells.length))
+    });
+}
 
 /**
  * Parse markdown content and convert to docx paragraphs
@@ -18,13 +99,31 @@ export function parseMarkdownToDocx(markdown) {
     let inCodeBlock = false;
     let codeBlockContent = [];
     let listItems = [];
+    let tableRows = [];
+    let inTable = false;
+    let lastWasEmpty = false; // Track consecutive empty lines
+
+    const flushTable = () => {
+        if (tableRows.length > 0) {
+            const table = createTable(tableRows);
+            if (table) {
+                elements.push(table);
+                elements.push(new Paragraph({ spacing: { after: 200 } }));
+            }
+            tableRows = [];
+            inTable = false;
+        }
+    };
 
     const flushList = () => {
         if (listItems.length > 0) {
             listItems.forEach(item => {
                 elements.push(
                     new Paragraph({
-                        children: [new TextRun({ text: `• ${item}` })],
+                        children: [
+                            new TextRun({ text: '• ' }),
+                            ...parseInlineFormatting(item)
+                        ],
                         indent: { left: 720 },
                         spacing: { after: 100 }
                     })
@@ -68,12 +167,29 @@ export function parseMarkdownToDocx(markdown) {
             continue;
         }
 
-        // Empty line
+        // Table handling
+        if (isTableRow(line)) {
+            if (!inTable) {
+                flushList();
+                inTable = true;
+            }
+            tableRows.push(line);
+            continue;
+        } else if (inTable) {
+            flushTable();
+        }
+
+        // Empty line - skip consecutive empty lines
         if (line.trim() === '') {
             flushList();
-            elements.push(new Paragraph({ spacing: { after: 100 } }));
+            flushTable();
+            if (!lastWasEmpty) {
+                elements.push(new Paragraph({ spacing: { after: 100 } }));
+                lastWasEmpty = true;
+            }
             continue;
         }
+        lastWasEmpty = false;
 
         // Headers
         if (line.startsWith('# ')) {
@@ -136,6 +252,20 @@ export function parseMarkdownToDocx(markdown) {
             continue;
         }
 
+        // Horizontal rule
+        if (line.match(/^-{3,}$/)) {
+            flushList();
+            elements.push(
+                new Paragraph({
+                    border: {
+                        bottom: { style: BorderStyle.SINGLE, size: 6, color: 'CCCCCC' }
+                    },
+                    spacing: { before: 200, after: 200 }
+                })
+            );
+            continue;
+        }
+
         // Regular paragraph with inline formatting
         flushList();
         elements.push(
@@ -147,6 +277,7 @@ export function parseMarkdownToDocx(markdown) {
     }
 
     flushList();
+    flushTable();
     return elements;
 }
 

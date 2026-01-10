@@ -4,6 +4,11 @@ export const isValidResponse = (text) => {
         return false;
     }
 
+    // Les specs complètes sont toujours valides (contenu markdown structuré)
+    if (text.includes('[SPEC_COMPLETE]')) {
+        return true;
+    }
+
     // Mots français courants qui devraient apparaître dans une réponse normale
     const frenchWords = ['le', 'la', 'de', 'et', 'tu', 'je', 'pour', 'que', 'est', 'un', 'une', 'en', 'ce', 'il', 'qui', 'ne', 'sur', 'se', 'pas', 'plus', 'par', 'son', 'avec', 'tout', 'faire', 'comme', 'ou', 'si', 'leur', 'y', 'mais', 'nous', 'cette', 'ont', 'bien', 'où', 'ces', 'sans', 'elle', 'peut', 'été', 'aussi', 'aux', 'être', 'fait', 'sont', 'quand', 'ton', 'ta', 'tes'];
 

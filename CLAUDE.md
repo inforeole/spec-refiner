@@ -71,3 +71,33 @@ Vercel-ready. Push to GitHub and import, or use `vercel` CLI.
 - No testing framework configured
 - ESLint strict mode (zero warnings allowed)
 - ES modules only (`"type": "module"`)
+
+## UI Testing with Chrome
+
+Après toute modification d'interface (composants React, styles, interactions), tu DOIS tester visuellement avec Chrome :
+
+1. **Démarrer le serveur dev** (si pas déjà lancé) :
+   ```bash
+   npm run dev  # Lance sur http://localhost:5173
+   ```
+
+2. **Tester avec les outils Chrome MCP** :
+   - `tabs_context_mcp` → obtenir le contexte des onglets
+   - `tabs_create_mcp` → créer un nouvel onglet
+   - `navigate` → aller sur http://localhost:5173
+   - `computer` avec `action: "screenshot"` → capturer l'état actuel
+   - `read_page` → lire l'arbre d'accessibilité
+   - `find` → trouver des éléments spécifiques
+   - `computer` avec `action: "left_click"` → tester les interactions
+
+3. **Vérifications minimales** :
+   - Screenshot de l'état initial
+   - Vérifier que les éléments modifiés sont visibles
+   - Tester les interactions ajoutées/modifiées (clics, formulaires)
+   - Screenshot après interaction pour confirmer le comportement
+
+4. **En cas d'erreur** :
+   - `read_console_messages` → vérifier les erreurs JS
+   - Corriger et re-tester
+
+**Note** : Le mot de passe de l'app est dans `VITE_APP_PASSWORD` du `.env`. Si tu dois passer l'auth, utilise cette valeur.

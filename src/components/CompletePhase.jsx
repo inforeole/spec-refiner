@@ -1,4 +1,4 @@
-import { Download, RotateCcw, RefreshCw, CheckCircle2, MessageCircle } from 'lucide-react';
+import { Download, RotateCcw, RefreshCw, CheckCircle2, MessageCircle, Edit3 } from 'lucide-react';
 import { MarkdownRenderer } from './index';
 
 /**
@@ -6,10 +6,12 @@ import { MarkdownRenderer } from './index';
  */
 export default function CompletePhase({
     finalSpec,
+    isLoading,
     onBackToInterview,
     onRegenerate,
     onDownload,
-    onReset
+    onReset,
+    onRequestModifications
 }) {
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
@@ -29,10 +31,10 @@ export default function CompletePhase({
                         <button
                             onClick={onBackToInterview}
                             className="bg-slate-700 hover:bg-slate-600 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
-                            title="Voir l'historique de la conversation"
+                            title="Voir l'interview"
                         >
                             <MessageCircle className="w-4 h-4" />
-                            Historique
+                            Interview
                         </button>
                         <button
                             onClick={onDownload}
@@ -53,18 +55,37 @@ export default function CompletePhase({
                         </p>
                         <button
                             onClick={onRegenerate}
-                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
+                            disabled={isLoading}
+                            className={`${isLoading ? 'bg-emerald-800 cursor-wait' : 'bg-emerald-600 hover:bg-emerald-500'} text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2`}
                             title="Régénérer les spécifications"
                         >
-                            <RefreshCw className="w-4 h-4" />
-                            Régénérer
+                            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                            {isLoading ? 'Régénération...' : 'Régénérer'}
                         </button>
                     </div>
                     <MarkdownRenderer content={finalSpec} />
                 </div>
 
-                {/* Footer */}
-                <div className="mt-6 flex justify-center">
+                {/* Action buttons */}
+                <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+                    <button
+                        onClick={onDownload}
+                        className="bg-violet-600 hover:bg-violet-500 text-white font-medium py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2"
+                    >
+                        <Download className="w-5 h-5" />
+                        Télécharger les specs
+                    </button>
+                    <button
+                        onClick={onRequestModifications}
+                        className="bg-slate-700 hover:bg-slate-600 text-white font-medium py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2"
+                    >
+                        <Edit3 className="w-5 h-5" />
+                        Apporter des modifications
+                    </button>
+                </div>
+
+                {/* Footer - séparé pour action dangereuse */}
+                <div className="mt-8 pt-4 border-t border-slate-700 flex justify-center">
                     <button
                         onClick={onReset}
                         className="text-slate-500 hover:text-slate-300 text-sm flex items-center gap-2 transition-colors"

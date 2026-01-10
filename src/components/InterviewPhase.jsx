@@ -1,4 +1,4 @@
-import { Download, RotateCcw, Sparkles, CheckCircle2, Upload, Volume2, VolumeX } from 'lucide-react';
+import { Download, RotateCcw, Sparkles, CheckCircle2, Upload, Volume2, VolumeX, RefreshCw } from 'lucide-react';
 import { ChatInput, MessageList } from './index';
 import { INTERVIEW_CONFIG } from '../config/constants';
 
@@ -86,13 +86,23 @@ export default function InterviewPhase({
                             </button>
                         )}
                         {finalSpec && (
-                            <button
-                                onClick={onViewSpec}
-                                className="bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
-                            >
-                                <Download className="w-4 h-4" />
-                                Voir les specs
-                            </button>
+                            <>
+                                <button
+                                    onClick={onRequestSpec}
+                                    disabled={isLoading}
+                                    className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
+                                >
+                                    <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                                    Régénérer
+                                </button>
+                                <button
+                                    onClick={onViewSpec}
+                                    className="bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
+                                >
+                                    <Download className="w-4 h-4" />
+                                    Voir les specs
+                                </button>
+                            </>
                         )}
                         {questionCount >= INTERVIEW_CONFIG.MIN_QUESTIONS_BEFORE_SPEC && !finalSpec && (
                             <button
@@ -118,6 +128,27 @@ export default function InterviewPhase({
                 isLoadingAudio={isLoadingAudio}
             />
 
+            {/* Boutons Régénérer et Voir les specs au-dessus de la zone de saisie */}
+            {finalSpec && (
+                <div className="py-3 flex justify-center gap-3 border-t border-slate-700 bg-slate-800/80 backdrop-blur">
+                    <button
+                        onClick={onRequestSpec}
+                        disabled={isLoading}
+                        className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
+                    >
+                        <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                        Régénérer les specs
+                    </button>
+                    <button
+                        onClick={onViewSpec}
+                        className="bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
+                    >
+                        <Download className="w-4 h-4" />
+                        Voir les specs
+                    </button>
+                </div>
+            )}
+
             <ChatInput
                 value={inputMessage}
                 onChange={setInputMessage}
@@ -127,6 +158,8 @@ export default function InterviewPhase({
                 onFileRemove={onFileRemove}
                 disabled={isLoading || isProcessingFiles}
                 isProcessingFiles={isProcessingFiles}
+                showGenerateButton={questionCount >= INTERVIEW_CONFIG.MIN_QUESTIONS_BEFORE_SPEC && !finalSpec}
+                onRequestSpec={onRequestSpec}
             />
 
             {/* Footer */}

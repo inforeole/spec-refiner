@@ -3,6 +3,7 @@ import { processFiles } from '../utils/fileProcessing';
 
 /**
  * Hook pour gérer l'input du chat (message + fichiers)
+ * Limité à 1 fichier à la fois
  * @returns {Object} États et handlers pour le chat input
  */
 export function useChatInput() {
@@ -12,11 +13,14 @@ export function useChatInput() {
 
     const handleFileSelect = useCallback((e) => {
         const selectedFiles = Array.from(e.target?.files || e.dataTransfer?.files || []);
-        setChatFiles(prev => [...prev, ...selectedFiles]);
+        // Limité à 1 fichier - on prend seulement le premier
+        if (selectedFiles.length > 0) {
+            setChatFiles([selectedFiles[0]]);
+        }
     }, []);
 
-    const removeFile = useCallback((index) => {
-        setChatFiles(prev => prev.filter((_, i) => i !== index));
+    const removeFile = useCallback(() => {
+        setChatFiles([]);
     }, []);
 
     const clearInput = useCallback(() => {
@@ -25,7 +29,10 @@ export function useChatInput() {
     }, []);
 
     const addFiles = useCallback((files) => {
-        setChatFiles(prev => [...prev, ...files]);
+        // Limité à 1 fichier - on prend seulement le premier
+        if (files.length > 0) {
+            setChatFiles([files[0]]);
+        }
     }, []);
 
     /**

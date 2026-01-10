@@ -4,14 +4,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { loadSession, saveSession, clearSession, checkSupabaseConnection } from '../services/sessionService';
+import { deleteImage } from '../services/imageService';
+import { extractStorageImageUrls } from '../utils/messageUtils';
 
-const WELCOME_MESSAGE = `[AUDIO]Salut ! Je suis l'assistant de Phil. Décris-moi ton projet ![/AUDIO]
-
-Salut ! 👋 Je suis l'assistant IA de Phil ([inforeole.fr](https://inforeole.fr)), et je vais t'aider à affiner ton cahier des charges.
-
-Décris-moi ton projet en quelques phrases : quel problème veux-tu résoudre ? Pour qui ? Quelles sont les fonctionnalités principales que tu imagines ?
-
-Tu peux aussi joindre des fichiers (images, PDF, documents) si tu as déjà des maquettes ou des documents de référence.`;
+const WELCOME_MESSAGE = `Salut ! 👋 Comment tu t'appelles ?`;
 
 export function useSession() {
     const [sessionData, setSessionData] = useState({
@@ -117,6 +113,13 @@ export function useSession() {
     }, []);
 
     const resetSession = useCallback(async () => {
+        // Extract and delete all images from Storage before clearing session
+        const imageUrls = extractStorageImageUrls(sessionData.messages);
+
+        if (imageUrls.length > 0) {
+            await Promise.all(imageUrls.map(url => deleteImage(url)));
+        }
+
         const result = await clearSession();
         if (result.error) {
             console.error('Failed to clear session:', result.error);
@@ -131,7 +134,7 @@ export function useSession() {
         setSessionData(initialData);
         await saveSession(initialData, true);
         lastSavedData.current = initialData;
-    }, []);
+    }, [sessionData.messages]);
 
     return {
         ...sessionData,

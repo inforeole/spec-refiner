@@ -68,7 +68,7 @@ describe('useChatInput', () => {
             expect(result.current.chatFiles[0].name).toBe('dropped.pdf');
         });
 
-        it('accumule les fichiers', () => {
+        it('remplace le fichier existant (limité à 1 fichier)', () => {
             const { result } = renderHook(() => useChatInput());
             const file1 = new File(['content1'], 'file1.txt', { type: 'text/plain' });
             const file2 = new File(['content2'], 'file2.txt', { type: 'text/plain' });
@@ -80,27 +80,26 @@ describe('useChatInput', () => {
                 result.current.handleFileSelect({ target: { files: [file2] } });
             });
 
-            expect(result.current.chatFiles).toHaveLength(2);
+            expect(result.current.chatFiles).toHaveLength(1);
+            expect(result.current.chatFiles[0].name).toBe('file2.txt');
         });
     });
 
     describe('removeFile', () => {
-        it('supprime un fichier par index', () => {
+        it('supprime le fichier unique', () => {
             const { result } = renderHook(() => useChatInput());
-            const file1 = new File(['content1'], 'file1.txt', { type: 'text/plain' });
-            const file2 = new File(['content2'], 'file2.txt', { type: 'text/plain' });
+            const file = new File(['content'], 'file.txt', { type: 'text/plain' });
 
             act(() => {
-                result.current.handleFileSelect({ target: { files: [file1, file2] } });
+                result.current.handleFileSelect({ target: { files: [file] } });
             });
-            expect(result.current.chatFiles).toHaveLength(2);
-
-            act(() => {
-                result.current.removeFile(0);
-            });
-
             expect(result.current.chatFiles).toHaveLength(1);
-            expect(result.current.chatFiles[0].name).toBe('file2.txt');
+
+            act(() => {
+                result.current.removeFile();
+            });
+
+            expect(result.current.chatFiles).toHaveLength(0);
         });
     });
 
@@ -127,7 +126,7 @@ describe('useChatInput', () => {
     });
 
     describe('addFiles', () => {
-        it('ajoute des fichiers directement', () => {
+        it('ajoute le premier fichier seulement (limité à 1)', () => {
             const { result } = renderHook(() => useChatInput());
             const files = [
                 new File(['content1'], 'file1.txt', { type: 'text/plain' }),
@@ -138,7 +137,8 @@ describe('useChatInput', () => {
                 result.current.addFiles(files);
             });
 
-            expect(result.current.chatFiles).toHaveLength(2);
+            expect(result.current.chatFiles).toHaveLength(1);
+            expect(result.current.chatFiles[0].name).toBe('file1.txt');
         });
     });
 

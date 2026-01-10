@@ -76,7 +76,32 @@ export default function SpecRefiner() {
     };
 
     const reset = () => resetWithConfirmation('Voulez-vous vraiment recommencer ? Tout l\'historique sera effacé.');
-    const regenerate = () => resetWithConfirmation('Voulez-vous vraiment régénérer ? La spécification actuelle, les documents et l\'historique seront supprimés.');
+
+    const regenerate = async () => {
+        // Régénérer = refaire le document de specs à partir de la conversation existante
+        // PAS un reset ! On garde tout l'historique.
+        await requestFinalSpec();
+    };
+
+    const requestModifications = () => {
+        // Retour à l'interview avec un message demandant les modifications
+        // apiContent contient des instructions supplémentaires pour l'IA
+        sessionHook.updateMessages(prev => [...prev, {
+            role: 'assistant',
+            content: '📝 Tu souhaites apporter des modifications aux spécifications. Dis-moi ce que tu voudrais changer ou préciser !',
+            apiContent: `📝 L'utilisateur souhaite apporter des modifications aux spécifications déjà générées.
+
+INSTRUCTIONS IMPORTANTES :
+- Tu es maintenant en mode CONVERSATION pour discuter des modifications
+- NE GÉNÈRE PAS [SPEC_COMPLETE] - les specs existent déjà
+- Pose des questions pour comprendre ce que l'utilisateur veut modifier
+- Continue la discussion normalement jusqu'à ce que l'utilisateur demande explicitement de "régénérer" ou "mettre à jour" les specs
+- Quand l'utilisateur sera prêt, il cliquera sur le bouton "Régénérer les specs"
+
+Dis-moi ce que tu voudrais changer ou préciser !`
+        }]);
+        updatePhase('interview');
+    };
 
     // ==================== Render ====================
 
@@ -163,10 +188,12 @@ export default function SpecRefiner() {
     return (
         <CompletePhase
             finalSpec={finalSpec}
+            isLoading={isLoading}
             onBackToInterview={() => updatePhase('interview')}
             onRegenerate={regenerate}
             onDownload={downloadSpec}
             onReset={reset}
+            onRequestModifications={requestModifications}
         />
     );
 }

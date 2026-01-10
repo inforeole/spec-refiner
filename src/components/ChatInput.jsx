@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Send, Loader2, Upload } from 'lucide-react';
+import { Send, Loader2, Upload, CheckCircle2 } from 'lucide-react';
 import FileList from './FileList';
 
 export default function ChatInput({
@@ -10,7 +10,9 @@ export default function ChatInput({
     onFileSelect,
     onFileRemove,
     disabled,
-    isProcessingFiles
+    isProcessingFiles,
+    showGenerateButton,
+    onRequestSpec
 }) {
     const fileInputRef = useRef(null);
 
@@ -94,6 +96,18 @@ export default function ChatInput({
                     >
                         {isProcessingFiles ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
                     </button>
+
+                    {showGenerateButton && (
+                        <button
+                            onClick={onRequestSpec}
+                            disabled={disabled}
+                            className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white px-4 py-3 rounded-xl transition-colors self-end flex items-center gap-2 whitespace-nowrap"
+                            title="Générer les spécifications"
+                        >
+                            <CheckCircle2 className="w-5 h-5" />
+                            <span className="hidden sm:inline">Générer specs</span>
+                        </button>
+                    )}
                 </div>
 
                 <p className="text-slate-500 text-xs mt-2 text-center">

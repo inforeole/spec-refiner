@@ -18,7 +18,8 @@ export function useTTSMessage(messages) {
     } = useTTS();
 
     const messagesEndRef = useRef(null);
-    const lastMessageCountRef = useRef(messages.length);
+    // Initialize to 0 to properly detect the first message
+    const lastMessageCountRef = useRef(0);
 
     // Auto-scroll to bottom when messages change
     useEffect(() => {
@@ -26,29 +27,42 @@ export function useTTSMessage(messages) {
     }, [messages]);
 
     // Preload and auto-play TTS for new assistant messages
+    // Note: Message 0 (welcome) is never played - TTS starts from message 1+
     useEffect(() => {
-        // Reset ref if messages were cleared (new session)
-        if (messages.length < lastMessageCountRef.current) {
-            lastMessageCountRef.current = messages.length;
+        const prevCount = lastMessageCountRef.current;
+        const currCount = messages.length;
+
+        // No messages yet or only welcome message
+        if (currCount <= 1) {
+            lastMessageCountRef.current = currCount;
             return;
         }
 
-        if (messages.length === 0) return;
+        // No new messages
+        if (currCount === prevCount) {
+            return;
+        }
 
-        // Check if a new message was added
-        if (messages.length > lastMessageCountRef.current) {
-            const lastMessage = messages[messages.length - 1];
+        // Messages were cleared (session reset) - sync ref
+        if (currCount < prevCount) {
+            lastMessageCountRef.current = currCount;
+            return;
+        }
+
+        // New messages detected (currCount > prevCount)
+        // Only play if this is a genuinely new message (not session restore)
+        if (prevCount > 0) {
+            const lastMessage = messages[currCount - 1];
             if (lastMessage.role === 'assistant') {
-                const messageId = messages.length - 1;
-                // Preload audio in background
+                const messageId = currCount - 1;
                 preloadAudio(lastMessage.content, messageId);
-                // Auto-play if enabled
                 if (autoPlayEnabled) {
                     playAudio(lastMessage.content, messageId);
                 }
             }
         }
-        lastMessageCountRef.current = messages.length;
+
+        lastMessageCountRef.current = currCount;
     }, [messages, autoPlayEnabled, playAudio, preloadAudio]);
 
     return {

@@ -20,40 +20,27 @@ export const withTimeout = (promise, timeoutMs, errorMessage) => {
 };
 
 /**
- * Read a file as base64 data URL
+ * Generic file reader wrapper
+ * @param {File} file - File to read
+ * @param {'readAsDataURL'|'readAsText'|'readAsArrayBuffer'} method - FileReader method to use
  */
-export const readFileAsBase64 = (file) => {
+const readFile = (file, method) => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
         reader.onerror = () => reject(new Error('Erreur lors de la lecture du fichier'));
-        reader.readAsDataURL(file);
+        reader[method](file);
     });
 };
 
-/**
- * Read a file as text
- */
-export const readFileAsText = (file) => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => reject(new Error('Erreur lors de la lecture du fichier'));
-        reader.readAsText(file);
-    });
-};
+/** Read a file as base64 data URL */
+export const readFileAsBase64 = (file) => readFile(file, 'readAsDataURL');
 
-/**
- * Read a file as ArrayBuffer
- */
-export const readFileAsArrayBuffer = (file) => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => reject(new Error('Erreur lors de la lecture du fichier'));
-        reader.readAsArrayBuffer(file);
-    });
-};
+/** Read a file as text */
+export const readFileAsText = (file) => readFile(file, 'readAsText');
+
+/** Read a file as ArrayBuffer */
+export const readFileAsArrayBuffer = (file) => readFile(file, 'readAsArrayBuffer');
 
 /**
  * Process an image file and return base64 data
