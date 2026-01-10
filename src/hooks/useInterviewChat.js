@@ -13,11 +13,12 @@ import { getSystemPrompt } from '../prompts/systemPrompt';
 export function useInterviewChat(sessionHook) {
     const {
         messages,
-        finalSpec,
         updateMessages,
         updatePhase,
         updateQuestionCount,
-        updateFinalSpec
+        updateFinalSpec,
+        isModificationMode,
+        exitModificationMode
     } = sessionHook;
 
     const [isLoading, setIsLoading] = useState(false);
@@ -90,7 +91,8 @@ export function useInterviewChat(sessionHook) {
 
         updateFinalSpec(specContent);
         updatePhase('complete');
-    }, [updateMessages, updateFinalSpec, updatePhase]);
+        exitModificationMode();
+    }, [updateMessages, updateFinalSpec, updatePhase, exitModificationMode]);
 
     /**
      * Envoie un message avec fichiers optionnels
@@ -181,10 +183,9 @@ export function useInterviewChat(sessionHook) {
                 return false;
             }
 
-            // Si l'IA génère [SPEC_COMPLETE] mais qu'on a déjà des specs,
-            // c'est qu'on est en mode modification - ignorer et continuer la conversation
+            // Si l'IA génère [SPEC_COMPLETE] mais qu'on est en mode modification,
+            // ignorer le marker et continuer la conversation
             const hasSpecMarker = response.includes(MARKERS.SPEC_COMPLETE);
-            const isModificationMode = !!finalSpec;
 
             if (hasSpecMarker && !isModificationMode) {
                 // Première génération de specs
@@ -212,7 +213,7 @@ export function useInterviewChat(sessionHook) {
             setIsLoading(false);
             return false;
         }
-    }, [isLoading, finalSpec, buildConversationHistory, callAPI, updateMessages, handleSpecComplete, updateQuestionCount]);
+    }, [isLoading, isModificationMode, buildConversationHistory, callAPI, updateMessages, handleSpecComplete, updateQuestionCount]);
 
     /**
      * Demande la génération du spec final
@@ -222,7 +223,15 @@ export function useInterviewChat(sessionHook) {
 
         const conversationHistory = buildConversationHistory({
             role: 'user',
-            content: 'Génère maintenant la spécification finale complète avec toutes les informations recueillies. IMPORTANT: Commence le document par 2 phrases qui résument clairement l\'objectif du projet et le problème qu\'il résout. Réponds avec [SPEC_COMPLETE] suivi du document. ATTENTION: Pour ce document final, N\'UTILISE PAS de bloc [AUDIO] - c\'est un document écrit, pas un message conversationnel.'
+            content: `GÉNÉRATION DU DOCUMENT DE SPÉCIFICATIONS
+
+RÈGLES OBLIGATOIRES:
+1. Réponds avec [SPEC_COMPLETE] suivi IMMÉDIATEMENT du document markdown
+2. Le document DOIT commencer par: # Cahier des Charges
+3. Commence par 2 phrases résumant l'objectif du projet et le problème résolu
+4. NE POSE AUCUNE QUESTION dans le document - utilise [À DÉFINIR] pour les infos manquantes
+5. PAS de bloc [AUDIO] - c'est un document écrit
+6. Structure recommandée: Résumé > Contexte > Utilisateurs > Fonctionnalités > Contraintes techniques > Livrables`
         });
 
         try {

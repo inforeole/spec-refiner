@@ -14,7 +14,8 @@ export function useSession() {
         messages: [],
         phase: 'interview',
         questionCount: 0,
-        finalSpec: null
+        finalSpec: null,
+        isModificationMode: false
     });
     const [isLoading, setIsLoading] = useState(true);
     const [connectionError, setConnectionError] = useState(null);
@@ -55,7 +56,8 @@ export function useSession() {
                     messages: [{ role: 'assistant', content: WELCOME_MESSAGE }],
                     phase: 'interview',
                     questionCount: 0,
-                    finalSpec: null
+                    finalSpec: null,
+                    isModificationMode: false
                 };
                 setSessionData(initialData);
                 // Save initial session
@@ -102,6 +104,14 @@ export function useSession() {
         }));
     }, []);
 
+    const enterModificationMode = useCallback(() => {
+        setSessionData(prev => ({ ...prev, isModificationMode: true }));
+    }, []);
+
+    const exitModificationMode = useCallback(() => {
+        setSessionData(prev => ({ ...prev, isModificationMode: false }));
+    }, []);
+
     const updateFinalSpec = useCallback((finalSpec) => {
         setSessionData(prev => {
             const newData = { ...prev, finalSpec };
@@ -129,7 +139,8 @@ export function useSession() {
             messages: [{ role: 'assistant', content: WELCOME_MESSAGE }],
             phase: 'interview',
             questionCount: 0,
-            finalSpec: null
+            finalSpec: null,
+            isModificationMode: false
         };
         setSessionData(initialData);
         await saveSession(initialData, true);
@@ -144,6 +155,8 @@ export function useSession() {
         updatePhase,
         updateQuestionCount,
         updateFinalSpec,
-        resetSession
+        resetSession,
+        enterModificationMode,
+        exitModificationMode
     };
 }

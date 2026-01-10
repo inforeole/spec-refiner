@@ -84,6 +84,8 @@ export default function SpecRefiner() {
     };
 
     const requestModifications = () => {
+        // Activer explicitement le mode modification AVANT d'ajouter le message
+        sessionHook.enterModificationMode();
         // Retour à l'interview avec un message demandant les modifications
         // apiContent contient des instructions supplémentaires pour l'IA
         sessionHook.updateMessages(prev => [...prev, {

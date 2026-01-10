@@ -72,7 +72,8 @@ export async function loadSession() {
                 messages: data.messages || [],
                 phase: data.phase || 'interview',
                 questionCount: data.question_count || 0,
-                finalSpec: data.final_spec || null
+                finalSpec: data.final_spec || null,
+                isModificationMode: data.is_modification_mode || false
             },
             error: null
         };
@@ -102,7 +103,8 @@ export async function saveSession(data, immediate = false) {
                     messages: filterMessagesForStorage(data.messages || []),
                     phase: data.phase,
                     question_count: data.questionCount,
-                    final_spec: data.finalSpec
+                    final_spec: data.finalSpec,
+                    is_modification_mode: data.isModificationMode || false
                 }, {
                     onConflict: 'session_key'
                 });
