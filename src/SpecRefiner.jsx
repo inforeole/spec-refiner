@@ -21,6 +21,7 @@ export default function SpecRefiner() {
         phase,
         questionCount,
         finalSpec,
+        messageCountAtLastSpec,
         isLoading: isSessionLoading,
         connectionError,
         updatePhase,
@@ -39,7 +40,10 @@ export default function SpecRefiner() {
         processCurrentFiles
     } = useChatInput();
 
-    const { isLoading, sendMessage, requestFinalSpec, abortRequest } = useInterviewChat(sessionHook);
+    const { isLoading, isRegenerating, sendMessage, requestFinalSpec, abortRequest } = useInterviewChat(sessionHook);
+
+    // Calculer si nouvelles modifications depuis la dernière génération
+    const hasNewMessagesSinceSpec = messages.length > messageCountAtLastSpec;
 
     const { isDragging, dragHandlers } = useDragDrop({
         onDrop: addFiles,
@@ -158,7 +162,10 @@ Dis-moi ce que tu voudrais changer ou préciser !`
                 finalSpec={finalSpec}
                 // Loading states
                 isLoading={isLoading}
+                isRegenerating={isRegenerating}
                 isProcessingFiles={isProcessingFiles}
+                // Visibility flags
+                hasNewMessagesSinceSpec={hasNewMessagesSinceSpec}
                 // Drag & drop
                 isDragging={isDragging}
                 dragHandlers={dragHandlers}
@@ -190,7 +197,8 @@ Dis-moi ce que tu voudrais changer ou préciser !`
     return (
         <CompletePhase
             finalSpec={finalSpec}
-            isLoading={isLoading}
+            isRegenerating={isRegenerating}
+            hasNewMessagesSinceSpec={hasNewMessagesSinceSpec}
             onBackToInterview={() => updatePhase('interview')}
             onRegenerate={regenerate}
             onDownload={downloadSpec}

@@ -6,7 +6,8 @@ import { MarkdownRenderer } from './index';
  */
 export default function CompletePhase({
     finalSpec,
-    isLoading,
+    isRegenerating,
+    hasNewMessagesSinceSpec,
     onBackToInterview,
     onRegenerate,
     onDownload,
@@ -53,15 +54,17 @@ export default function CompletePhase({
                         <p className="text-slate-400 text-sm">
                             Généré le {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })} à {new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                         </p>
-                        <button
-                            onClick={onRegenerate}
-                            disabled={isLoading}
-                            className={`${isLoading ? 'bg-emerald-800 cursor-wait' : 'bg-emerald-600 hover:bg-emerald-500'} text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2`}
-                            title="Régénérer les spécifications"
-                        >
-                            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                            {isLoading ? 'Régénération...' : 'Régénérer'}
-                        </button>
+                        {hasNewMessagesSinceSpec && (
+                            <button
+                                onClick={onRegenerate}
+                                disabled={isRegenerating}
+                                className={`${isRegenerating ? 'bg-emerald-800 cursor-wait' : 'bg-emerald-600 hover:bg-emerald-500'} text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2`}
+                                title="Régénérer les spécifications"
+                            >
+                                <RefreshCw className={`w-4 h-4 ${isRegenerating ? 'animate-spin' : ''}`} />
+                                {isRegenerating ? 'Régénération...' : 'Régénérer'}
+                            </button>
+                        )}
                     </div>
                     <MarkdownRenderer content={finalSpec} />
                 </div>

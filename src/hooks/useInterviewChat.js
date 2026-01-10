@@ -18,10 +18,12 @@ export function useInterviewChat(sessionHook) {
         updateQuestionCount,
         updateFinalSpec,
         isModificationMode,
-        exitModificationMode
+        exitModificationMode,
+        updateMessageCountAtLastSpec
     } = sessionHook;
 
     const [isLoading, setIsLoading] = useState(false);
+    const [isRegenerating, setIsRegenerating] = useState(false);
     const abortControllerRef = useRef(null);
 
     /**
@@ -84,15 +86,20 @@ export function useInterviewChat(sessionHook) {
 
         // Ajouter un message à l'historique pour que l'IA sache que les specs ont été générées
         // (important si l'utilisateur revient sur l'interview pour faire des modifications)
-        updateMessages(prev => [...prev, {
-            role: 'assistant',
-            content: '[AUDIO]Voilà, j\'ai généré le document de spécifications ![/AUDIO]\n\n✅ **Les spécifications ont été générées et sont maintenant affichées.**\n\nSi tu veux apporter des modifications, tu pourras revenir me voir.'
-        }]);
+        updateMessages(prev => {
+            const newMessages = [...prev, {
+                role: 'assistant',
+                content: '[AUDIO]Voilà, j\'ai généré le document de spécifications ![/AUDIO]\n\n✅ **Les spécifications ont été générées et sont maintenant affichées.**\n\nSi tu veux apporter des modifications, tu pourras revenir me voir.'
+            }];
+            // Mémoriser le nombre de messages au moment de la génération
+            updateMessageCountAtLastSpec(newMessages.length);
+            return newMessages;
+        });
 
         updateFinalSpec(specContent);
         updatePhase('complete');
         exitModificationMode();
-    }, [updateMessages, updateFinalSpec, updatePhase, exitModificationMode]);
+    }, [updateMessages, updateFinalSpec, updatePhase, exitModificationMode, updateMessageCountAtLastSpec]);
 
     /**
      * Envoie un message avec fichiers optionnels
@@ -219,7 +226,7 @@ export function useInterviewChat(sessionHook) {
      * Demande la génération du spec final
      */
     const requestFinalSpec = useCallback(async () => {
-        setIsLoading(true);
+        setIsRegenerating(true);
 
         const conversationHistory = buildConversationHistory({
             role: 'user',
@@ -239,19 +246,19 @@ RÈGLES OBLIGATOIRES:
 
             if (!isValid) {
                 alert('La génération des spécifications a échoué (réponse incohérente). Veuillez réessayer.');
-                setIsLoading(false);
+                setIsRegenerating(false);
                 return false;
             }
 
             handleSpecComplete(response);
-            setIsLoading(false);
+            setIsRegenerating(false);
             return true;
         } catch (error) {
             if (error.name === 'AbortError') {
                 return false;
             }
             alert(`Erreur: ${error.message}`);
-            setIsLoading(false);
+            setIsRegenerating(false);
             return false;
         }
     }, [buildConversationHistory, callAPI, handleSpecComplete]);
@@ -265,10 +272,12 @@ RÈGLES OBLIGATOIRES:
             abortControllerRef.current = null;
         }
         setIsLoading(false);
+        setIsRegenerating(false);
     }, []);
 
     return {
         isLoading,
+        isRegenerating,
         sendMessage,
         requestFinalSpec,
         abortRequest

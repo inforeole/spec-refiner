@@ -12,7 +12,10 @@ export default function InterviewPhase({
     finalSpec,
     // Loading states
     isLoading,
+    isRegenerating,
     isProcessingFiles,
+    // Visibility flags
+    hasNewMessagesSinceSpec,
     // Drag & drop
     isDragging,
     dragHandlers,
@@ -87,14 +90,16 @@ export default function InterviewPhase({
                         )}
                         {finalSpec && (
                             <>
-                                <button
-                                    onClick={onRequestSpec}
-                                    disabled={isLoading}
-                                    className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
-                                >
-                                    <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                                    Régénérer
-                                </button>
+                                {hasNewMessagesSinceSpec && (
+                                    <button
+                                        onClick={onRequestSpec}
+                                        disabled={isRegenerating}
+                                        className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
+                                    >
+                                        <RefreshCw className={`w-4 h-4 ${isRegenerating ? 'animate-spin' : ''}`} />
+                                        Régénérer
+                                    </button>
+                                )}
                                 <button
                                     onClick={onViewSpec}
                                     className="bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
@@ -131,14 +136,16 @@ export default function InterviewPhase({
             {/* Boutons Régénérer et Voir les specs au-dessus de la zone de saisie */}
             {finalSpec && (
                 <div className="py-3 flex justify-center gap-3 border-t border-slate-700 bg-slate-800/80 backdrop-blur">
-                    <button
-                        onClick={onRequestSpec}
-                        disabled={isLoading}
-                        className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
-                    >
-                        <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-                        Régénérer les specs
-                    </button>
+                    {hasNewMessagesSinceSpec && (
+                        <button
+                            onClick={onRequestSpec}
+                            disabled={isRegenerating}
+                            className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
+                        >
+                            <RefreshCw className={`w-4 h-4 ${isRegenerating ? 'animate-spin' : ''}`} />
+                            Régénérer les specs
+                        </button>
+                    )}
                     <button
                         onClick={onViewSpec}
                         className="bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"

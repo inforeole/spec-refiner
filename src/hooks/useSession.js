@@ -15,7 +15,8 @@ export function useSession() {
         phase: 'interview',
         questionCount: 0,
         finalSpec: null,
-        isModificationMode: false
+        isModificationMode: false,
+        messageCountAtLastSpec: 0
     });
     const [isLoading, setIsLoading] = useState(true);
     const [connectionError, setConnectionError] = useState(null);
@@ -57,7 +58,8 @@ export function useSession() {
                     phase: 'interview',
                     questionCount: 0,
                     finalSpec: null,
-                    isModificationMode: false
+                    isModificationMode: false,
+                    messageCountAtLastSpec: 0
                 };
                 setSessionData(initialData);
                 // Save initial session
@@ -112,6 +114,10 @@ export function useSession() {
         setSessionData(prev => ({ ...prev, isModificationMode: false }));
     }, []);
 
+    const updateMessageCountAtLastSpec = useCallback((count) => {
+        setSessionData(prev => ({ ...prev, messageCountAtLastSpec: count }));
+    }, []);
+
     const updateFinalSpec = useCallback((finalSpec) => {
         setSessionData(prev => {
             const newData = { ...prev, finalSpec };
@@ -140,7 +146,8 @@ export function useSession() {
             phase: 'interview',
             questionCount: 0,
             finalSpec: null,
-            isModificationMode: false
+            isModificationMode: false,
+            messageCountAtLastSpec: 0
         };
         setSessionData(initialData);
         await saveSession(initialData, true);
@@ -157,6 +164,7 @@ export function useSession() {
         updateFinalSpec,
         resetSession,
         enterModificationMode,
-        exitModificationMode
+        exitModificationMode,
+        updateMessageCountAtLastSpec
     };
 }

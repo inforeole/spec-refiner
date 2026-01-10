@@ -73,7 +73,8 @@ export async function loadSession() {
                 phase: data.phase || 'interview',
                 questionCount: data.question_count || 0,
                 finalSpec: data.final_spec || null,
-                isModificationMode: data.is_modification_mode || false
+                isModificationMode: data.is_modification_mode || false,
+                messageCountAtLastSpec: data.message_count_at_last_spec || 0
             },
             error: null
         };
@@ -104,7 +105,8 @@ export async function saveSession(data, immediate = false) {
                     phase: data.phase,
                     question_count: data.questionCount,
                     final_spec: data.finalSpec,
-                    is_modification_mode: data.isModificationMode || false
+                    is_modification_mode: data.isModificationMode || false,
+                    message_count_at_last_spec: data.messageCountAtLastSpec || 0
                 }, {
                     onConflict: 'session_key'
                 });
