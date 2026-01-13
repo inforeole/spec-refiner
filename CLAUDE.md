@@ -6,6 +6,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Spec Refiner is a French-language AI-powered SaaS project specification tool. Users describe their project idea, then engage in a guided interview with Claude AI to refine requirements into a complete specification document.
 
+## Règles Obligatoires
+
+**Avant toute action :**
+- **Ne JAMAIS lancer `npm run dev` sans validation explicite de l'utilisateur**
+- **Toujours demander confirmation avant d'exécuter des commandes**
+
+**Principes de code :**
+- **DRY (Don't Repeat Yourself)** : Avant de coder, vérifier si du code existant peut être réutilisé ou factorisé
+- **KISS** : Privilégier les solutions simples
+- **Pas d'over-engineering** : Ne pas ajouter de fonctionnalités non demandées
+
+**Protection de la production :**
+- **INTERDIT** : Toute action dangereuse pour la prod (push force, delete branches, modifications DB directes, etc.)
+- **INTERDIT** : Modifier les variables d'environnement de prod
+- **INTERDIT** : Déployer sans validation explicite
+- **Toujours travailler sur une branche séparée pour les nouvelles features**
+
+**Documentation :**
+- **Après toute modification significative, TOUJOURS mettre à jour ce fichier CLAUDE.md**
+- Documenter les nouvelles features, changements d'architecture, nouvelles dépendances
+
 ## Build & Development Commands
 
 ```bash
@@ -21,31 +42,42 @@ npm run preview      # Preview production build
 Create `.env` with:
 ```
 VITE_OPENROUTER_API_KEY=sk-or-v1-...  # OpenRouter API key
-VITE_APP_PASSWORD=...                 # Session password
+VITE_APP_PASSWORD=...                 # Admin password (pour /admin)
+VITE_SUPABASE_URL=https://xxx.supabase.co  # Supabase project URL
+VITE_SUPABASE_ANON_KEY=eyJ...              # Supabase anon/public key
 ```
 
 ## Architecture
 
-**Single-Page React Application** with four phases:
-1. **Auth** - Password login (session-based via sessionStorage)
+**Single-Page React Application** with quatre phases utilisateur:
+1. **Auth** - Login email/password (multi-users via Supabase)
 2. **Input** - Project description + file uploads
 3. **Interview** - Multi-turn Claude conversation
 4. **Complete** - Specification display/download
 
+**Authentification Multi-Users (Supabase):**
+- Table `specrefiner_users` : id, email, password_hash, created_at
+- Hashage via pgcrypto (fonctions RPC `create_user`, `verify_password`)
+- Page admin `/admin` : création/suppression d'utilisateurs (protégée par `VITE_APP_PASSWORD`)
+
 **Key Files:**
-- `src/SpecRefiner.jsx` - Main component (843 lines, handles all phases)
-- `src/App.jsx` - Wrapper component
-- `src/main.jsx` - React entry point
+- `src/SpecRefiner.jsx` - Main component (handles all phases)
+- `src/App.jsx` - Router (/, /admin)
+- `src/components/AdminPage.jsx` - Gestion des utilisateurs
+- `src/hooks/useAuth.js` - Hook d'authentification
+- `src/services/userService.js` - CRUD utilisateurs Supabase
+- `src/lib/supabase.js` - Client Supabase
 
 **State Persistence:**
-- `sessionStorage` - Auth state (`spec-refiner-auth`)
-- `localStorage` - Session data (`spec-refiner-session`: messages, specs, phase, question count)
+- `sessionStorage` - Auth state (`spec-refiner-auth` : user object JSON)
+- `localStorage` - Session data par user (`spec-refiner-session-{userId}`: messages, specs, phase)
 
 ## Tech Stack
 
 - React 18 + Vite 5
 - Tailwind CSS
 - Lucide React (icons)
+- **Supabase** (auth multi-users, PostgreSQL)
 - mammoth (DOCX extraction)
 - pdfjs-dist (PDF extraction)
 
