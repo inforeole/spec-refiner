@@ -7,7 +7,22 @@ import { loadSession, saveSession, clearSession, checkSupabaseConnection } from 
 import { deleteImage } from '../services/imageService';
 import { extractStorageImageUrls } from '../utils/messageUtils';
 
-const WELCOME_MESSAGE = `Salut ! Comment tu t'appelles ?`;
+// Détection mobile (user agent + écran tactile)
+const isMobileDevice = () => {
+    const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+    const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
+    const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const isSmallScreen = window.innerWidth <= 768;
+    return mobileRegex.test(userAgent.toLowerCase()) || (isTouchDevice && isSmallScreen);
+};
+
+const getWelcomeMessage = () => {
+    const baseMessage = `Salut ! Comment tu t'appelles ?`;
+    if (isMobileDevice()) {
+        return `📱 L'appli fonctionne sur mobile, mais l'expérience est meilleure sur ordinateur.\n\n${baseMessage}`;
+    }
+    return baseMessage;
+};
 
 /**
  * Hook for managing user session
@@ -73,7 +88,7 @@ export function useSession(userId) {
             } else {
                 // New session with welcome message
                 const initialData = {
-                    messages: [{ role: 'assistant', content: WELCOME_MESSAGE }],
+                    messages: [{ role: 'assistant', content: getWelcomeMessage() }],
                     phase: 'interview',
                     questionCount: 0,
                     finalSpec: null,
@@ -170,7 +185,7 @@ export function useSession(userId) {
         }
 
         const initialData = {
-            messages: [{ role: 'assistant', content: WELCOME_MESSAGE }],
+            messages: [{ role: 'assistant', content: getWelcomeMessage() }],
             phase: 'interview',
             questionCount: 0,
             finalSpec: null,
