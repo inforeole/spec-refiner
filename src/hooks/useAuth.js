@@ -1,44 +1,70 @@
 import { useState, useEffect, useCallback } from 'react';
+import { loginUser } from '../services/userService';
 
 const AUTH_STORAGE_KEY = 'spec-refiner-auth';
 
 /**
- * Hook pour gérer l'authentification de l'application
- * @returns {Object} { isAuthenticated, passwordInput, setPasswordInput, authError, handleLogin }
+ * Hook pour gérer l'authentification utilisateur
+ * @returns {Object} { user, isAuthenticated, emailInput, setEmailInput, passwordInput, setPasswordInput, authError, isLoading, handleLogin, logout }
  */
 export function useAuth() {
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [user, setUser] = useState(null);
+    const [emailInput, setEmailInput] = useState('');
     const [passwordInput, setPasswordInput] = useState('');
-    const [authError, setAuthError] = useState(false);
+    const [authError, setAuthError] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
 
     // Vérifier l'auth au montage
     useEffect(() => {
-        const sessionAuth = sessionStorage.getItem(AUTH_STORAGE_KEY);
-        if (sessionAuth === 'true') {
-            setIsAuthenticated(true);
+        const storedAuth = sessionStorage.getItem(AUTH_STORAGE_KEY);
+        if (storedAuth) {
+            try {
+                const userData = JSON.parse(storedAuth);
+                if (userData?.id && userData?.email) {
+                    setUser(userData);
+                }
+            } catch {
+                sessionStorage.removeItem(AUTH_STORAGE_KEY);
+            }
         }
     }, []);
 
-    const handleLogin = useCallback((e) => {
+    const handleLogin = useCallback(async (e) => {
         e.preventDefault();
-        // Strip quotes and trim in case .env has quoted value
-        const correctPassword = (import.meta.env.VITE_APP_PASSWORD || '')
-            .replace(/^["']|["']$/g, '')
-            .trim();
-        if (passwordInput === correctPassword) {
-            setIsAuthenticated(true);
-            setAuthError(false);
-            sessionStorage.setItem(AUTH_STORAGE_KEY, 'true');
+        setIsLoading(true);
+        setAuthError(null);
+
+        const { user: loggedInUser, error } = await loginUser(emailInput, passwordInput);
+
+        if (loggedInUser) {
+            setUser(loggedInUser);
+            sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(loggedInUser));
+            setPasswordInput('');
         } else {
-            setAuthError(true);
+            setAuthError(error || 'Erreur de connexion');
         }
-    }, [passwordInput]);
+
+        setIsLoading(false);
+    }, [emailInput, passwordInput]);
+
+    const logout = useCallback(() => {
+        setUser(null);
+        sessionStorage.removeItem(AUTH_STORAGE_KEY);
+        setEmailInput('');
+        setPasswordInput('');
+        setAuthError(null);
+    }, []);
 
     return {
-        isAuthenticated,
+        user,
+        isAuthenticated: !!user,
+        emailInput,
+        setEmailInput,
         passwordInput,
         setPasswordInput,
         authError,
-        handleLogin
+        isLoading,
+        handleLogin,
+        logout
     };
 }

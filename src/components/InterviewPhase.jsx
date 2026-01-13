@@ -30,6 +30,10 @@ export default function InterviewPhase({
     onFileRemove,
     onViewSpec,
     onReset,
+    // File validation dialog
+    validationDialog,
+    onValidationAction,
+    onValidationCancel,
     // TTS
     onPlayAudio,
     playingMessageId,
@@ -167,6 +171,9 @@ export default function InterviewPhase({
                 isProcessingFiles={isProcessingFiles}
                 showGenerateButton={questionCount >= INTERVIEW_CONFIG.MIN_QUESTIONS_BEFORE_SPEC && !finalSpec}
                 onRequestSpec={onRequestSpec}
+                validationDialog={validationDialog}
+                onValidationAction={onValidationAction}
+                onValidationCancel={onValidationCancel}
             />
 
             {/* Footer */}

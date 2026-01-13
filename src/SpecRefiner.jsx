@@ -1,4 +1,4 @@
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, LogOut } from 'lucide-react';
 
 import { LoginForm, InterviewPhase, CompletePhase } from './components';
 import { downloadAsWord } from './utils/wordExport';
@@ -13,9 +13,20 @@ import { useMessageFlow } from './hooks/useMessageFlow';
 export default function SpecRefiner() {
     // ==================== Hooks ====================
 
-    const { isAuthenticated, passwordInput, setPasswordInput, authError, handleLogin } = useAuth();
+    const {
+        user,
+        isAuthenticated,
+        emailInput,
+        setEmailInput,
+        passwordInput,
+        setPasswordInput,
+        authError,
+        isLoading: isAuthLoading,
+        handleLogin,
+        logout
+    } = useAuth();
 
-    const sessionHook = useSession();
+    const sessionHook = useSession(user?.id);
     const {
         messages,
         phase,
@@ -37,7 +48,10 @@ export default function SpecRefiner() {
         removeFile,
         clearInput,
         addFiles,
-        processCurrentFiles
+        processCurrentFiles,
+        validationDialog,
+        handleValidationAction,
+        handleValidationCancel
     } = useChatInput();
 
     const { isLoading, isRegenerating, sendMessage, requestFinalSpec, abortRequest } = useInterviewChat(sessionHook);
@@ -109,6 +123,13 @@ Dis-moi ce que tu voudrais changer ou préciser !`
         updatePhase('interview');
     };
 
+    const handleLogout = () => {
+        if (confirm('Voulez-vous vous déconnecter ?')) {
+            abortRequest();
+            logout();
+        }
+    };
+
     // ==================== Render ====================
 
     if (!isAuthenticated) {
@@ -116,8 +137,11 @@ Dis-moi ce que tu voudrais changer ou préciser !`
             <LoginForm
                 onSubmit={handleLogin}
                 error={authError}
-                value={passwordInput}
-                onChange={setPasswordInput}
+                email={emailInput}
+                onEmailChange={setEmailInput}
+                password={passwordInput}
+                onPasswordChange={setPasswordInput}
+                isLoading={isAuthLoading}
             />
         );
     }
@@ -153,57 +177,81 @@ Dis-moi ce que tu voudrais changer ou préciser !`
         );
     }
 
+    // User header component
+    const UserHeader = () => (
+        <div className="fixed top-0 right-0 p-4 z-50 flex items-center gap-3">
+            <span className="text-slate-400 text-sm">{user?.email}</span>
+            <button
+                onClick={handleLogout}
+                className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors"
+                title="Se déconnecter"
+            >
+                <LogOut className="w-4 h-4" />
+            </button>
+        </div>
+    );
+
     if (phase === 'interview') {
         return (
-            <InterviewPhase
-                // Session data
-                messages={messages}
-                questionCount={questionCount}
-                finalSpec={finalSpec}
-                // Loading states
-                isLoading={isLoading}
-                isRegenerating={isRegenerating}
-                isProcessingFiles={isProcessingFiles}
-                // Visibility flags
-                hasNewMessagesSinceSpec={hasNewMessagesSinceSpec}
-                // Drag & drop
-                isDragging={isDragging}
-                dragHandlers={dragHandlers}
-                // Chat input
-                inputMessage={inputMessage}
-                setInputMessage={setInputMessage}
-                chatFiles={chatFiles}
-                // Handlers
-                onSendMessage={handleSendMessage}
-                onRequestSpec={requestFinalSpec}
-                onFileSelect={handleFileSelect}
-                onFileRemove={removeFile}
-                onViewSpec={() => updatePhase('complete')}
-                onReset={reset}
-                // TTS
-                onPlayAudio={playAudio}
-                playingMessageId={playingMessageId}
-                isPlayingAudio={isPlayingAudio}
-                isLoadingAudio={isLoadingAudio}
-                autoPlayEnabled={autoPlayEnabled}
-                onToggleAutoPlay={toggleAutoPlay}
-                // Refs
-                messagesEndRef={messagesEndRef}
-            />
+            <>
+                <UserHeader />
+                <InterviewPhase
+                    // Session data
+                    messages={messages}
+                    questionCount={questionCount}
+                    finalSpec={finalSpec}
+                    // Loading states
+                    isLoading={isLoading}
+                    isRegenerating={isRegenerating}
+                    isProcessingFiles={isProcessingFiles}
+                    // Visibility flags
+                    hasNewMessagesSinceSpec={hasNewMessagesSinceSpec}
+                    // Drag & drop
+                    isDragging={isDragging}
+                    dragHandlers={dragHandlers}
+                    // Chat input
+                    inputMessage={inputMessage}
+                    setInputMessage={setInputMessage}
+                    chatFiles={chatFiles}
+                    // Handlers
+                    onSendMessage={handleSendMessage}
+                    onRequestSpec={requestFinalSpec}
+                    onFileSelect={handleFileSelect}
+                    onFileRemove={removeFile}
+                    onViewSpec={() => updatePhase('complete')}
+                    onReset={reset}
+                    // File validation dialog
+                    validationDialog={validationDialog}
+                    onValidationAction={handleValidationAction}
+                    onValidationCancel={handleValidationCancel}
+                    // TTS
+                    onPlayAudio={playAudio}
+                    playingMessageId={playingMessageId}
+                    isPlayingAudio={isPlayingAudio}
+                    isLoadingAudio={isLoadingAudio}
+                    autoPlayEnabled={autoPlayEnabled}
+                    onToggleAutoPlay={toggleAutoPlay}
+                    // Refs
+                    messagesEndRef={messagesEndRef}
+                />
+            </>
         );
     }
 
     // Phase: complete
     return (
-        <CompletePhase
-            finalSpec={finalSpec}
-            isRegenerating={isRegenerating}
-            hasNewMessagesSinceSpec={hasNewMessagesSinceSpec}
-            onBackToInterview={() => updatePhase('interview')}
-            onRegenerate={regenerate}
-            onDownload={downloadSpec}
-            onReset={reset}
-            onRequestModifications={requestModifications}
-        />
+        <>
+            <UserHeader />
+            <CompletePhase
+                finalSpec={finalSpec}
+                isRegenerating={isRegenerating}
+                hasNewMessagesSinceSpec={hasNewMessagesSinceSpec}
+                onBackToInterview={() => updatePhase('interview')}
+                onRegenerate={regenerate}
+                onDownload={downloadSpec}
+                onReset={reset}
+                onRequestModifications={requestModifications}
+            />
+        </>
     );
 }

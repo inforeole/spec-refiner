@@ -1,5 +1,6 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
+import { MAX_TEXT_CONTENT_SIZE, MAX_IMAGE_DIMENSION, IMAGE_QUALITY } from './fileValidation';
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -17,6 +18,105 @@ export const withTimeout = (promise, timeoutMs, errorMessage) => {
             setTimeout(() => reject(new Error(errorMessage)), timeoutMs)
         )
     ]);
+};
+
+/**
+ * Tronque un texte à une taille maximale en bytes
+ * Coupe au dernier saut de ligne avant la limite
+ * @param {string} text - Texte à tronquer
+ * @param {number} maxBytes - Taille maximale en bytes
+ * @returns {string}
+ */
+export const truncateText = (text, maxBytes = MAX_TEXT_CONTENT_SIZE) => {
+    const encoder = new TextEncoder();
+    const encoded = encoder.encode(text);
+
+    if (encoded.length <= maxBytes) {
+        return text;
+    }
+
+    // Trouver la position de coupure
+    let cutPosition = maxBytes;
+
+    // Décoder jusqu'à la limite
+    const decoder = new TextDecoder();
+    let truncated = decoder.decode(encoded.slice(0, cutPosition));
+
+    // Chercher le dernier saut de ligne pour couper proprement
+    const lastNewline = truncated.lastIndexOf('\n');
+    if (lastNewline > maxBytes * 0.8) {
+        truncated = truncated.slice(0, lastNewline);
+    }
+
+    return truncated + '\n\n[... Document tronqué, suite non incluse ...]';
+};
+
+/**
+ * Redimensionne une image si elle dépasse les dimensions maximales
+ * @param {File} file - Fichier image
+ * @param {number} maxDimension - Dimension maximale (largeur ou hauteur)
+ * @param {number} quality - Qualité JPEG (0-1)
+ * @returns {Promise<File>}
+ */
+export const resizeImage = async (file, maxDimension = MAX_IMAGE_DIMENSION, quality = IMAGE_QUALITY) => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+
+        img.onload = () => {
+            URL.revokeObjectURL(url);
+
+            let { width, height } = img;
+
+            // Vérifier si redimensionnement nécessaire
+            if (width <= maxDimension && height <= maxDimension) {
+                resolve(file);
+                return;
+            }
+
+            // Calculer les nouvelles dimensions en gardant le ratio
+            if (width > height) {
+                height = Math.round((height * maxDimension) / width);
+                width = maxDimension;
+            } else {
+                width = Math.round((width * maxDimension) / height);
+                height = maxDimension;
+            }
+
+            // Créer le canvas et redimensionner
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Convertir en blob
+            canvas.toBlob(
+                (blob) => {
+                    if (!blob) {
+                        reject(new Error('Erreur lors du redimensionnement de l\'image'));
+                        return;
+                    }
+                    // Créer un nouveau File avec le même nom
+                    const resizedFile = new File([blob], file.name, {
+                        type: 'image/jpeg',
+                        lastModified: Date.now()
+                    });
+                    resolve(resizedFile);
+                },
+                'image/jpeg',
+                quality
+            );
+        };
+
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error('Erreur lors du chargement de l\'image'));
+        };
+
+        img.src = url;
+    });
 };
 
 /**

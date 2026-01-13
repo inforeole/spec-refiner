@@ -1,15 +1,13 @@
 /**
  * Session persistence service for Supabase
- * Handles all session data storage operations
+ * Handles all session data storage operations per user
  */
 
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { TIMEOUTS } from '../config/constants';
 
-const SESSION_KEY = 'default';
-
-// Debounce helper for auto-save
-let saveTimeout = null;
+// Debounce helper for auto-save (per user)
+const saveTimeouts = new Map();
 
 /**
  * Filter messages for storage
@@ -44,19 +42,24 @@ function filterMessagesForStorage(messages) {
 }
 
 /**
- * Load session from Supabase
+ * Load session from Supabase for a specific user
+ * @param {string} userId - The user's UUID
  * @returns {Promise<{data: Object|null, error: string|null}>}
  */
-export async function loadSession() {
+export async function loadSession(userId) {
     if (!isSupabaseConfigured()) {
         return { data: null, error: 'Supabase non configuré. Vérifiez les variables d\'environnement.' };
+    }
+
+    if (!userId) {
+        return { data: null, error: 'User ID requis' };
     }
 
     try {
         const { data, error } = await supabase
             .from('specrefiner_sessions')
             .select('*')
-            .eq('session_key', SESSION_KEY)
+            .eq('user_id', userId)
             .single();
 
         if (error) {
@@ -85,14 +88,19 @@ export async function loadSession() {
 }
 
 /**
- * Save session to Supabase
+ * Save session to Supabase for a specific user
+ * @param {string} userId - The user's UUID
  * @param {Object} data - Session data to save
  * @param {boolean} immediate - If true, save immediately without debounce
  * @returns {Promise<{success: boolean, error: string|null}>}
  */
-export async function saveSession(data, immediate = false) {
+export async function saveSession(userId, data, immediate = false) {
     if (!isSupabaseConfigured()) {
         return { success: false, error: 'Supabase non configuré' };
+    }
+
+    if (!userId) {
+        return { success: false, error: 'User ID requis' };
     }
 
     const doSave = async () => {
@@ -100,7 +108,7 @@ export async function saveSession(data, immediate = false) {
             const { error } = await supabase
                 .from('specrefiner_sessions')
                 .upsert({
-                    session_key: SESSION_KEY,
+                    user_id: userId,
                     messages: filterMessagesForStorage(data.messages || []),
                     phase: data.phase,
                     question_count: data.questionCount,
@@ -108,7 +116,7 @@ export async function saveSession(data, immediate = false) {
                     is_modification_mode: data.isModificationMode || false,
                     message_count_at_last_spec: data.messageCountAtLastSpec || 0
                 }, {
-                    onConflict: 'session_key'
+                    onConflict: 'user_id'
                 });
 
             if (error) throw error;
@@ -123,31 +131,37 @@ export async function saveSession(data, immediate = false) {
         return doSave();
     }
 
-    // Debounced save - returns immediately, saves in background
-    if (saveTimeout) {
-        clearTimeout(saveTimeout);
+    // Debounced save per user - returns immediately, saves in background
+    if (saveTimeouts.has(userId)) {
+        clearTimeout(saveTimeouts.get(userId));
     }
-    saveTimeout = setTimeout(() => {
+    saveTimeouts.set(userId, setTimeout(() => {
         doSave().catch(console.error);
-    }, TIMEOUTS.SAVE_DEBOUNCE);
+        saveTimeouts.delete(userId);
+    }, TIMEOUTS.SAVE_DEBOUNCE));
 
     return { success: true, error: null };
 }
 
 /**
- * Clear/reset session data
+ * Clear/reset session data for a specific user
+ * @param {string} userId - The user's UUID
  * @returns {Promise<{success: boolean, error: string|null}>}
  */
-export async function clearSession() {
+export async function clearSession(userId) {
     if (!isSupabaseConfigured()) {
         return { success: false, error: 'Supabase non configuré' };
+    }
+
+    if (!userId) {
+        return { success: false, error: 'User ID requis' };
     }
 
     try {
         const { error } = await supabase
             .from('specrefiner_sessions')
             .delete()
-            .eq('session_key', SESSION_KEY);
+            .eq('user_id', userId);
 
         if (error) throw error;
         return { success: true, error: null };

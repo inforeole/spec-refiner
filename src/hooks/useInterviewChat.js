@@ -216,7 +216,31 @@ export function useInterviewChat(sessionHook) {
                 return false;
             }
             console.error(error);
-            updateMessages(prev => [...prev, { role: 'assistant', content: `❌ Erreur: ${error.message}` }]);
+
+            // Détecter erreur de contexte trop long (fichier trop volumineux)
+            const isContextLengthError = error.message &&
+                (error.message.includes('maximum context length') ||
+                 error.message.includes('context_length_exceeded') ||
+                 error.message.includes('token'));
+
+            if (isContextLengthError) {
+                // Retirer le dernier message utilisateur (celui avec le fichier problématique)
+                updateMessages(prev => {
+                    const withoutLast = prev.slice(0, -1);
+                    return [...withoutLast, {
+                        role: 'assistant',
+                        content: `❌ Le fichier envoyé est trop volumineux pour être traité avec l'historique actuel de la conversation.
+
+Vous pouvez :
+• Envoyer un fichier plus petit
+• Envoyer uniquement un extrait du document
+• Continuer la conversation sans fichier`
+                    }];
+                });
+            } else {
+                updateMessages(prev => [...prev, { role: 'assistant', content: `❌ Erreur: ${error.message}` }]);
+            }
+
             setIsLoading(false);
             return false;
         }
@@ -257,7 +281,19 @@ RÈGLES OBLIGATOIRES:
             if (error.name === 'AbortError') {
                 return false;
             }
-            alert(`Erreur: ${error.message}`);
+
+            // Détecter erreur de contexte trop long
+            const isContextLengthError = error.message &&
+                (error.message.includes('maximum context length') ||
+                 error.message.includes('context_length_exceeded') ||
+                 error.message.includes('token'));
+
+            if (isContextLengthError) {
+                alert('La conversation est trop longue pour générer les spécifications. Essayez de supprimer certains fichiers volumineux de l\'historique ou de commencer une nouvelle session.');
+            } else {
+                alert(`Erreur: ${error.message}`);
+            }
+
             setIsRegenerating(false);
             return false;
         }

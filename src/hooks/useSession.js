@@ -7,9 +7,13 @@ import { loadSession, saveSession, clearSession, checkSupabaseConnection } from 
 import { deleteImage } from '../services/imageService';
 import { extractStorageImageUrls } from '../utils/messageUtils';
 
-const WELCOME_MESSAGE = `Salut ! 👋 Comment tu t'appelles ?`;
+const WELCOME_MESSAGE = `Salut ! Comment tu t'appelles ?`;
 
-export function useSession() {
+/**
+ * Hook for managing user session
+ * @param {string|null} userId - The authenticated user's ID
+ */
+export function useSession(userId) {
     const [sessionData, setSessionData] = useState({
         messages: [],
         phase: 'interview',
@@ -22,14 +26,29 @@ export function useSession() {
     const [connectionError, setConnectionError] = useState(null);
     const hasInitialized = useRef(false);
     const lastSavedData = useRef(null);
+    const currentUserId = useRef(null);
 
-    // Load session on mount
+    // Load session when userId changes
     useEffect(() => {
-        if (hasInitialized.current) return;
+        // Skip if no userId
+        if (!userId) {
+            setIsLoading(false);
+            return;
+        }
+
+        // Skip if same userId already initialized
+        if (hasInitialized.current && currentUserId.current === userId) {
+            return;
+        }
+
+        // Reset refs for new user (important: clear lastSavedData to prevent race conditions)
         hasInitialized.current = true;
+        currentUserId.current = userId;
+        lastSavedData.current = null;
 
         async function init() {
             setIsLoading(true);
+            setConnectionError(null);
 
             // Check connection first
             const { connected, error: connError } = await checkSupabaseConnection();
@@ -40,7 +59,7 @@ export function useSession() {
             }
 
             // Load existing session
-            const { data, error } = await loadSession();
+            const { data, error } = await loadSession(userId);
 
             if (error) {
                 setConnectionError(error);
@@ -63,7 +82,7 @@ export function useSession() {
                 };
                 setSessionData(initialData);
                 // Save initial session
-                await saveSession(initialData, true);
+                await saveSession(userId, initialData, true);
                 lastSavedData.current = initialData;
             }
 
@@ -71,11 +90,17 @@ export function useSession() {
         }
 
         init();
-    }, []);
+    }, [userId]);
 
     // Auto-save on data changes (after initial load)
     useEffect(() => {
-        if (isLoading || connectionError) return;
+        if (!userId || isLoading || connectionError) return;
+
+        // Safety: never save if we only have the welcome message (prevents overwriting real data)
+        // This can happen during race conditions when switching users
+        if (!lastSavedData.current && sessionData.messages.length <= 1) {
+            return;
+        }
 
         // Skip if data hasn't actually changed
         if (lastSavedData.current &&
@@ -84,8 +109,8 @@ export function useSession() {
         }
 
         lastSavedData.current = sessionData;
-        saveSession(sessionData);
-    }, [sessionData, isLoading, connectionError]);
+        saveSession(userId, sessionData);
+    }, [userId, sessionData, isLoading, connectionError]);
 
     // Update functions
     const updateMessages = useCallback((updater) => {
@@ -119,16 +144,19 @@ export function useSession() {
     }, []);
 
     const updateFinalSpec = useCallback((finalSpec) => {
+        if (!userId) return;
         setSessionData(prev => {
             const newData = { ...prev, finalSpec };
             // Immediate save for critical data
-            saveSession(newData, true);
+            saveSession(userId, newData, true);
             lastSavedData.current = newData;
             return newData;
         });
-    }, []);
+    }, [userId]);
 
     const resetSession = useCallback(async () => {
+        if (!userId) return;
+
         // Extract and delete all images from Storage before clearing session
         const imageUrls = extractStorageImageUrls(sessionData.messages);
 
@@ -136,7 +164,7 @@ export function useSession() {
             await Promise.all(imageUrls.map(url => deleteImage(url)));
         }
 
-        const result = await clearSession();
+        const result = await clearSession(userId);
         if (result.error) {
             console.error('Failed to clear session:', result.error);
         }
@@ -150,9 +178,9 @@ export function useSession() {
             messageCountAtLastSpec: 0
         };
         setSessionData(initialData);
-        await saveSession(initialData, true);
+        await saveSession(userId, initialData, true);
         lastSavedData.current = initialData;
-    }, [sessionData.messages]);
+    }, [userId, sessionData.messages]);
 
     return {
         ...sessionData,

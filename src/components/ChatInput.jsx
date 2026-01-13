@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { Send, Loader2, Upload, CheckCircle2 } from 'lucide-react';
 import FileList from './FileList';
+import FileValidationDialog from './FileValidationDialog';
 
 export default function ChatInput({
     value,
@@ -12,7 +13,10 @@ export default function ChatInput({
     disabled,
     isProcessingFiles,
     showGenerateButton,
-    onRequestSpec
+    onRequestSpec,
+    validationDialog,
+    onValidationAction,
+    onValidationCancel
 }) {
     const fileInputRef = useRef(null);
 
@@ -114,6 +118,19 @@ export default function ChatInput({
                     📎 Ajouter des fichiers • Ctrl+V pour coller • Glisser n&apos;importe où
                 </p>
             </div>
+
+            {/* Dialogue de validation de fichier */}
+            {validationDialog && (
+                <FileValidationDialog
+                    isOpen={validationDialog.isOpen}
+                    type={validationDialog.type}
+                    fileName={validationDialog.file?.name || ''}
+                    fileSize={validationDialog.fileSize}
+                    extractedSize={validationDialog.extractedSize}
+                    onAction={onValidationAction}
+                    onCancel={onValidationCancel}
+                />
+            )}
         </div>
     );
 }
