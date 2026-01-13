@@ -8,10 +8,6 @@ Spec Refiner is a French-language AI-powered SaaS project specification tool. Us
 
 ## Règles Obligatoires
 
-**Avant toute action :**
-- **Ne JAMAIS lancer `npm run dev` sans validation explicite de l'utilisateur**
-- **Toujours demander confirmation avant d'exécuter des commandes**
-
 **Principes de code :**
 - **DRY (Don't Repeat Yourself)** : Avant de coder, vérifier si du code existant peut être réutilisé ou factorisé
 - **KISS** : Privilégier les solutions simples
@@ -19,10 +15,15 @@ Spec Refiner is a French-language AI-powered SaaS project specification tool. Us
 - **Étude d'impact obligatoire** : Avant toute modification, analyser les dépendances et impacts potentiels pour éviter les régressions
 - **Ne JAMAIS modifier du code qui fonctionne** sans demander explicitement à l'utilisateur
 
-**Protection de la production :**
-- **INTERDIT** : Toute action dangereuse pour la prod (push force, delete branches, modifications DB directes, etc.)
+**Protection des données de production (CRITIQUE) :**
+- **INTERDIT SANS VALIDATION EXPLICITE** : Toute requête SQL modifiant la BDD de prod (INSERT, UPDATE, DELETE)
+- **INTERDIT SANS VALIDATION EXPLICITE** : Modifier ou supprimer des données utilisateur
+- **INTERDIT** : Push force, delete branches sur main
 - **INTERDIT** : Modifier les variables d'environnement de prod
 - **INTERDIT** : Déployer sans validation explicite
+
+**Commandes autorisées librement :**
+- `npm run dev`, `npm run build`, `npm run lint`, `npm install`, `npm run preview`
 
 **Git Workflow :**
 - **Branche principale** : `main` (production)
@@ -139,4 +140,6 @@ Après toute modification d'interface (composants React, styles, interactions), 
    - `read_console_messages` → vérifier les erreurs JS
    - Corriger et re-tester
 
-**Note** : Le mot de passe de l'app est dans `VITE_APP_PASSWORD` du `.env`. Si tu dois passer l'auth, utilise cette valeur.
+**Compte de test** : Utiliser `debug@test.com` avec le mot de passe `VITE_APP_PASSWORD` du `.env` pour les tests visuels.
+
+**Note** : Le mot de passe admin est dans `VITE_APP_PASSWORD` du `.env` (pour la page /admin).

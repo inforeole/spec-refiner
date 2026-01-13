@@ -1,6 +1,32 @@
-import { forwardRef } from 'react';
+import { forwardRef, useMemo } from 'react';
 import { Loader2, Volume2, Pause, Loader } from 'lucide-react';
 import MarkdownRenderer from './MarkdownRenderer';
+import MessageFilePreview from './MessageFilePreview';
+import { parseFileMarkers, extractImageUrls } from '../services/parseFileMarkers';
+
+/**
+ * Composant pour afficher le contenu d'un message utilisateur avec fichiers
+ */
+function UserMessageContent({ content, apiContent }) {
+    const { cleanContent, files } = useMemo(
+        () => parseFileMarkers(content),
+        [content]
+    );
+
+    const images = useMemo(
+        () => extractImageUrls(apiContent),
+        [apiContent]
+    );
+
+    return (
+        <>
+            {cleanContent && (
+                <div className="whitespace-pre-wrap">{cleanContent}</div>
+            )}
+            <MessageFilePreview textFiles={files} images={images} />
+        </>
+    );
+}
 
 const MessageList = forwardRef(function MessageList({
     messages,
@@ -49,7 +75,7 @@ const MessageList = forwardRef(function MessageList({
                                     )}
                                 </>
                             ) : (
-                                <div className="whitespace-pre-wrap">{msg.content}</div>
+                                <UserMessageContent content={msg.content} apiContent={msg.apiContent} />
                             )}
                         </div>
                     </div>
