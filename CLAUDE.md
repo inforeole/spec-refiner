@@ -16,6 +16,8 @@ Spec Refiner is a French-language AI-powered SaaS project specification tool. Us
 - **DRY (Don't Repeat Yourself)** : Avant de coder, vérifier si du code existant peut être réutilisé ou factorisé
 - **KISS** : Privilégier les solutions simples
 - **Pas d'over-engineering** : Ne pas ajouter de fonctionnalités non demandées
+- **Étude d'impact obligatoire** : Avant toute modification, analyser les dépendances et impacts potentiels pour éviter les régressions
+- **Ne JAMAIS modifier du code qui fonctionne** sans demander explicitement à l'utilisateur
 
 **Protection de la production :**
 - **INTERDIT** : Toute action dangereuse pour la prod (push force, delete branches, modifications DB directes, etc.)
