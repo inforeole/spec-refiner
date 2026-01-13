@@ -21,7 +21,12 @@ Spec Refiner is a French-language AI-powered SaaS project specification tool. Us
 - **INTERDIT** : Toute action dangereuse pour la prod (push force, delete branches, modifications DB directes, etc.)
 - **INTERDIT** : Modifier les variables d'environnement de prod
 - **INTERDIT** : Déployer sans validation explicite
-- **Toujours travailler sur une branche séparée pour les nouvelles features**
+
+**Git Workflow :**
+- **Branche principale** : `main` (production)
+- **Branche de travail** : `dev` (développement)
+- **Toujours travailler sur `dev`**, jamais directement sur `main`
+- Merger `dev` → `main` uniquement après validation utilisateur via PR
 
 **Documentation :**
 - **Après toute modification significative, TOUJOURS mettre à jour ce fichier CLAUDE.md**
