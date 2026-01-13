@@ -24,6 +24,7 @@ export function useInterviewChat(sessionHook) {
 
     const [isLoading, setIsLoading] = useState(false);
     const [isRegenerating, setIsRegenerating] = useState(false);
+    const [errorMessage, setErrorMessage] = useState(null);
     const abortControllerRef = useRef(null);
 
     /**
@@ -225,20 +226,11 @@ export function useInterviewChat(sessionHook) {
 
             if (isContextLengthError) {
                 // Retirer le dernier message utilisateur (celui avec le fichier problématique)
-                updateMessages(prev => {
-                    const withoutLast = prev.slice(0, -1);
-                    return [...withoutLast, {
-                        role: 'assistant',
-                        content: `❌ Le fichier envoyé est trop volumineux pour être traité avec l'historique actuel de la conversation.
-
-Vous pouvez :
-• Envoyer un fichier plus petit
-• Envoyer uniquement un extrait du document
-• Continuer la conversation sans fichier`
-                    }];
-                });
+                updateMessages(prev => prev.slice(0, -1));
+                setErrorMessage(`Le fichier envoyé est trop volumineux. Essayez avec un fichier plus petit ou continuez sans fichier.`);
             } else {
-                updateMessages(prev => [...prev, { role: 'assistant', content: `❌ Erreur: ${error.message}` }]);
+                // Ne pas persister l'erreur dans les messages - utiliser un état temporaire
+                setErrorMessage(error.message);
             }
 
             setIsLoading(false);
@@ -311,9 +303,13 @@ RÈGLES OBLIGATOIRES:
         setIsRegenerating(false);
     }, []);
 
+    const clearError = useCallback(() => setErrorMessage(null), []);
+
     return {
         isLoading,
         isRegenerating,
+        errorMessage,
+        clearError,
         sendMessage,
         requestFinalSpec,
         abortRequest

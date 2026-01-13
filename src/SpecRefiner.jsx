@@ -54,7 +54,7 @@ export default function SpecRefiner() {
         handleValidationCancel
     } = useChatInput();
 
-    const { isLoading, isRegenerating, sendMessage, requestFinalSpec, abortRequest } = useInterviewChat(sessionHook);
+    const { isLoading, isRegenerating, errorMessage, clearError, sendMessage, requestFinalSpec, abortRequest } = useInterviewChat(sessionHook);
 
     // Calculer si nouvelles modifications depuis la dernière génération
     const hasNewMessagesSinceSpec = messages.length > messageCountAtLastSpec;
@@ -204,6 +204,9 @@ Dis-moi ce que tu voudrais changer ou préciser !`
                     isLoading={isLoading}
                     isRegenerating={isRegenerating}
                     isProcessingFiles={isProcessingFiles}
+                    // Error handling
+                    errorMessage={errorMessage}
+                    onClearError={clearError}
                     // Visibility flags
                     hasNewMessagesSinceSpec={hasNewMessagesSinceSpec}
                     // Drag & drop

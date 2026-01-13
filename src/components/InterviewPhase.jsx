@@ -14,6 +14,9 @@ export default function InterviewPhase({
     isLoading,
     isRegenerating,
     isProcessingFiles,
+    // Error handling
+    errorMessage,
+    onClearError,
     // Visibility flags
     hasNewMessagesSinceSpec,
     // Drag & drop
@@ -57,6 +60,19 @@ export default function InterviewPhase({
                         <p className="text-white text-xl font-medium">Dépose tes fichiers ici</p>
                         <p className="text-slate-400 text-sm mt-2">Images, PDF, Word, texte...</p>
                     </div>
+                </div>
+            )}
+
+            {/* Error toast */}
+            {errorMessage && (
+                <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-red-900/90 backdrop-blur border border-red-500/50 rounded-lg px-4 py-3 shadow-lg flex items-center gap-3 max-w-md">
+                    <span className="text-red-200 text-sm flex-1">❌ {errorMessage}</span>
+                    <button
+                        onClick={onClearError}
+                        className="text-red-300 hover:text-white text-lg font-bold"
+                    >
+                        ×
+                    </button>
                 </div>
             )}
 
