@@ -43,9 +43,27 @@ export async function generateFileSummary(fileContent, fileName) {
     });
 
     if (!response.ok) {
-        throw new Error('Summary generation failed');
+        let errorMessage = `Erreur génération résumé (${response.status})`;
+        try {
+            const errorData = await response.json();
+            errorMessage = errorData.error?.message || errorMessage;
+        } catch {
+            // Réponse non-JSON
+        }
+        throw new Error(errorMessage);
     }
 
-    const data = await response.json();
+    let data;
+    try {
+        data = await response.json();
+    } catch {
+        throw new Error('Réponse API invalide (non-JSON)');
+    }
+
+    if (!data.choices?.[0]?.message?.content) {
+        const errorMsg = data.error?.message || 'Réponse API inattendue';
+        throw new Error(errorMsg);
+    }
+
     return data.choices[0].message.content.trim();
 }
