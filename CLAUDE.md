@@ -50,10 +50,13 @@ npm run preview      # Preview production build
 Create `.env` with:
 ```
 VITE_OPENROUTER_API_KEY=sk-or-v1-...  # OpenRouter API key
-VITE_APP_PASSWORD=...                 # Admin password (pour /admin)
+VITE_APP_PASSWORD=...                 # Admin password (pour /admin UI)
+VITE_ADMIN_TOKEN=...                  # Admin token for secure RPCs (server-side validation)
 VITE_SUPABASE_URL=https://xxx.supabase.co  # Supabase project URL
 VITE_SUPABASE_ANON_KEY=eyJ...              # Supabase anon/public key
 ```
+
+**Important**: `VITE_ADMIN_TOKEN` doit correspondre à `app.admin_token` dans Supabase (voir Security Setup).
 
 ## Architecture
 
@@ -67,6 +70,13 @@ VITE_SUPABASE_ANON_KEY=eyJ...              # Supabase anon/public key
 - Table `specrefiner_users` : id, email, password_hash, created_at
 - Hashage via pgcrypto (fonctions RPC `create_user`, `verify_password`)
 - Page admin `/admin` : création/suppression d'utilisateurs (protégée par `VITE_APP_PASSWORD`)
+
+**Security Architecture (Row Level Security):**
+- RLS activé sur `specrefiner_users` et `specrefiner_sessions`
+- Toutes les opérations passent par des RPCs `SECURITY DEFINER`
+- Pas d'accès direct aux tables depuis le client
+- RPCs sécurisées : `login_user_secure`, `load_user_session`, `save_user_session`, `clear_user_session`
+- RPCs admin : `admin_create_user`, `admin_list_users`, `admin_delete_user` (requièrent `admin_token`)
 
 **Key Files:**
 - `src/SpecRefiner.jsx` - Main component (handles all phases)
@@ -105,10 +115,30 @@ Supports: Images (base64), PDF (text extraction), DOCX (text extraction), TXT, M
 
 Vercel-ready. Push to GitHub and import, or use `vercel` CLI.
 
+## Security Setup (Supabase)
+
+**IMPORTANT** : La migration de sécurité a été appliquée. En cas de nouveau déploiement :
+
+1. **Exécuter la migration SQL** dans Supabase SQL Editor :
+   ```
+   supabase/migrations/001_security_hardening.sql
+   ```
+
+2. **Le token admin est stocké** dans la table `specrefiner_config` (protégée par RLS).
+   Pour changer le token :
+   ```sql
+   -- Via une fonction SECURITY DEFINER ou directement en tant que postgres
+   UPDATE specrefiner_config SET value = 'nouveau-token' WHERE key = 'admin_token';
+   ```
+
+3. **Token actuel** dans `.env` : `VITE_ADMIN_TOKEN` doit correspondre à la valeur en BDD.
+
+**Politique de mot de passe** : 12+ caractères, majuscule, minuscule, chiffre, caractère spécial.
+
 ## Code Conventions
 
 - All UI text and AI prompts are in French
-- No testing framework configured
+- Vitest pour les tests (`npm run test`)
 - ESLint strict mode (zero warnings allowed)
 - ES modules only (`"type": "module"`)
 
@@ -143,3 +173,38 @@ Après toute modification d'interface (composants React, styles, interactions), 
 **Compte de test** : Utiliser `debug@test.com` avec le mot de passe `VITE_APP_PASSWORD` du `.env` pour les tests visuels.
 
 **Note** : Le mot de passe admin est dans `VITE_APP_PASSWORD` du `.env` (pour la page /admin).
+
+## Post-Mortem & Capitalisation
+
+Système automatique de logging et d'analyse pour améliorer les pratiques de développement.
+
+**Structure :**
+```
+.claude/
+  settings.json       # Hooks de logging
+  scripts/
+    log-prompt.sh     # Log les prompts utilisateur
+    log-error.sh      # Log les erreurs
+    analyze.js        # Script d'analyse post-mortem
+  logs/
+    prompts.jsonl     # Historique des prompts (ignoré par git)
+    errors.jsonl      # Historique des erreurs (ignoré par git)
+  report.md           # Dernier rapport généré (ignoré par git)
+```
+
+**Utilisation :**
+```bash
+npm run postmortem   # Génère un rapport d'analyse
+```
+
+**Le rapport inclut :**
+- Répartition des prompts (bugs, features, questions, refactoring)
+- Mots-clés fréquents (sujets récurrents)
+- Ratio fix/feature dans les commits
+- Recommandations pour améliorer CLAUDE.md
+- Insights sur les patterns détectés
+
+**Logging automatique :**
+- Chaque prompt est loggé avec timestamp, branche git et hash de commit
+- Les erreurs des outils sont capturées automatiquement
+- Les logs ne sont PAS committés (dans .gitignore)

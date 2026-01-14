@@ -185,9 +185,9 @@ export default function AdminPage() {
                                 type="password"
                                 value={newPassword}
                                 onChange={(e) => setNewPassword(e.target.value)}
-                                placeholder="Mot de passe (min. 6 caractères)"
+                                placeholder="Mot de passe (12+ car., maj, min, chiffre, special)"
                                 required
-                                minLength={6}
+                                minLength={12}
                                 disabled={isCreating}
                                 className="bg-slate-900/50 border border-slate-600 rounded-xl px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
                             />

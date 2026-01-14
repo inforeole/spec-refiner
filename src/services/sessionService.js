@@ -1,6 +1,6 @@
 /**
  * Session persistence service for Supabase
- * Handles all session data storage operations per user
+ * Uses secure RPC functions - all access goes through SECURITY DEFINER RPCs
  */
 
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -55,6 +55,7 @@ function filterMessagesForStorage(messages) {
 
 /**
  * Load session from Supabase for a specific user
+ * Uses secure RPC function
  * @param {string} userId - The user's UUID
  * @returns {Promise<{data: Object|null, error: string|null}>}
  */
@@ -68,28 +69,26 @@ export async function loadSession(userId) {
     }
 
     try {
-        const { data, error } = await supabase
-            .from('specrefiner_sessions')
-            .select('*')
-            .eq('user_id', userId)
-            .single();
+        const { data, error } = await supabase.rpc('load_user_session', {
+            p_user_id: userId
+        });
 
-        if (error) {
-            // PGRST116 = no rows found, not an error for us
-            if (error.code === 'PGRST116') {
-                return { data: null, error: null };
-            }
-            throw error;
+        if (error) throw error;
+
+        // RPC returns empty array if no session found
+        if (!data || data.length === 0) {
+            return { data: null, error: null };
         }
 
+        const sessionData = data[0];
         return {
             data: {
-                messages: data.messages || [],
-                phase: data.phase || 'interview',
-                questionCount: data.question_count || 0,
-                finalSpec: data.final_spec || null,
-                isModificationMode: data.is_modification_mode || false,
-                messageCountAtLastSpec: data.message_count_at_last_spec || 0
+                messages: sessionData.messages || [],
+                phase: sessionData.phase || 'interview',
+                questionCount: sessionData.question_count || 0,
+                finalSpec: sessionData.final_spec || null,
+                isModificationMode: sessionData.is_modification_mode || false,
+                messageCountAtLastSpec: sessionData.message_count_at_last_spec || 0
             },
             error: null
         };
@@ -101,6 +100,7 @@ export async function loadSession(userId) {
 
 /**
  * Save session to Supabase for a specific user
+ * Uses secure RPC function
  * @param {string} userId - The user's UUID
  * @param {Object} data - Session data to save
  * @param {boolean} immediate - If true, save immediately without debounce
@@ -117,19 +117,15 @@ export async function saveSession(userId, data, immediate = false) {
 
     const doSave = async () => {
         try {
-            const { error } = await supabase
-                .from('specrefiner_sessions')
-                .upsert({
-                    user_id: userId,
-                    messages: filterMessagesForStorage(data.messages || []),
-                    phase: data.phase,
-                    question_count: data.questionCount,
-                    final_spec: data.finalSpec,
-                    is_modification_mode: data.isModificationMode || false,
-                    message_count_at_last_spec: data.messageCountAtLastSpec || 0
-                }, {
-                    onConflict: 'user_id'
-                });
+            const { error } = await supabase.rpc('save_user_session', {
+                p_user_id: userId,
+                p_messages: filterMessagesForStorage(data.messages || []),
+                p_phase: data.phase,
+                p_question_count: data.questionCount,
+                p_final_spec: data.finalSpec,
+                p_is_modification_mode: data.isModificationMode || false,
+                p_message_count_at_last_spec: data.messageCountAtLastSpec || 0
+            });
 
             if (error) throw error;
             return { success: true, error: null };
@@ -157,6 +153,7 @@ export async function saveSession(userId, data, immediate = false) {
 
 /**
  * Clear/reset session data for a specific user
+ * Uses secure RPC function
  * @param {string} userId - The user's UUID
  * @returns {Promise<{success: boolean, error: string|null}>}
  */
@@ -170,10 +167,9 @@ export async function clearSession(userId) {
     }
 
     try {
-        const { error } = await supabase
-            .from('specrefiner_sessions')
-            .delete()
-            .eq('user_id', userId);
+        const { error } = await supabase.rpc('clear_user_session', {
+            p_user_id: userId
+        });
 
         if (error) throw error;
         return { success: true, error: null };
@@ -185,6 +181,7 @@ export async function clearSession(userId) {
 
 /**
  * Check if Supabase is available and working
+ * Uses a lightweight RPC call
  * @returns {Promise<{connected: boolean, error: string|null}>}
  */
 export async function checkSupabaseConnection() {
@@ -193,12 +190,16 @@ export async function checkSupabaseConnection() {
     }
 
     try {
-        const { error } = await supabase
-            .from('specrefiner_sessions')
-            .select('id')
-            .limit(1);
+        // Use a simple RPC call to test connection
+        // The RPC will return empty if no session exists, which is fine
+        const { error } = await supabase.rpc('load_user_session', {
+            p_user_id: '00000000-0000-0000-0000-000000000000'
+        });
 
-        if (error) throw error;
+        // Even if the query returns no rows, the connection is valid
+        if (error && !error.message.includes('No rows')) {
+            throw error;
+        }
         return { connected: true, error: null };
     } catch (e) {
         return { connected: false, error: `Connexion impossible: ${e.message}` };

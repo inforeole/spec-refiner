@@ -1,12 +1,23 @@
 /**
  * User authentication and management service
- * Uses pgcrypto for password hashing via Supabase RPC functions
+ * Uses secure RPC functions - never exposes password_hash to client
  */
 
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { validateEmail, validatePassword, sanitizeEmail } from '../utils/validation';
+
+/**
+ * Get admin token from environment
+ * @returns {string|null}
+ */
+function getAdminToken() {
+    const token = import.meta.env.VITE_ADMIN_TOKEN;
+    return token ? token.replace(/^["']|["']$/g, '').trim() : null;
+}
 
 /**
  * Login user with email and password
+ * Uses secure RPC that never exposes password_hash
  * @param {string} email
  * @param {string} password
  * @returns {Promise<{user: {id: string, email: string} | null, error: string | null}>}
@@ -16,35 +27,34 @@ export async function loginUser(email, password) {
         return { user: null, error: 'Supabase non configuré' };
     }
 
+    // Validate email format
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.isValid) {
+        return { user: null, error: emailValidation.error };
+    }
+
+    const normalizedEmail = sanitizeEmail(email);
+
     try {
-        // Get user by email
-        const { data: userData, error: fetchError } = await supabase
-            .from('specrefiner_users')
-            .select('id, email, password_hash')
-            .eq('email', email.toLowerCase().trim())
-            .single();
-
-        if (fetchError) {
-            if (fetchError.code === 'PGRST116') {
-                return { user: null, error: 'Email ou mot de passe incorrect' };
-            }
-            throw fetchError;
-        }
-
-        // Verify password using RPC function
-        const { data: isValid, error: verifyError } = await supabase.rpc('verify_password', {
-            input_password: password,
-            stored_hash: userData.password_hash
+        // Use secure login RPC - never returns password_hash
+        const { data, error: loginError } = await supabase.rpc('login_user_secure', {
+            user_email: normalizedEmail,
+            user_password: password
         });
 
-        if (verifyError) throw verifyError;
+        if (loginError) {
+            console.error('Login RPC error:', loginError);
+            throw loginError;
+        }
 
-        if (!isValid) {
+        // RPC returns empty array if login failed
+        if (!data || data.length === 0) {
             return { user: null, error: 'Email ou mot de passe incorrect' };
         }
 
+        const userData = data[0];
         return {
-            user: { id: userData.id, email: userData.email },
+            user: { id: userData.user_id, email: userData.user_email_out },
             error: null
         };
     } catch (e) {
@@ -55,6 +65,7 @@ export async function loginUser(email, password) {
 
 /**
  * Create a new user (admin only)
+ * Requires valid admin token
  * @param {string} email
  * @param {string} password
  * @returns {Promise<{user: {id: string, email: string} | null, error: string | null}>}
@@ -64,19 +75,29 @@ export async function createUser(email, password) {
         return { user: null, error: 'Supabase non configuré' };
     }
 
-    const normalizedEmail = email.toLowerCase().trim();
-
-    if (!normalizedEmail || !password) {
-        return { user: null, error: 'Email et mot de passe requis' };
+    // Validate email
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.isValid) {
+        return { user: null, error: emailValidation.error };
     }
 
-    if (password.length < 6) {
-        return { user: null, error: 'Le mot de passe doit faire au moins 6 caractères' };
+    // Validate password strength
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
+        return { user: null, error: passwordValidation.error };
+    }
+
+    const normalizedEmail = sanitizeEmail(email);
+    const adminToken = getAdminToken();
+
+    if (!adminToken) {
+        return { user: null, error: 'Token admin non configuré (VITE_ADMIN_TOKEN)' };
     }
 
     try {
-        // Create user via RPC (handles password hashing server-side)
-        const { data: userId, error: createError } = await supabase.rpc('create_user', {
+        // Use admin RPC with token validation
+        const { data: userId, error: createError } = await supabase.rpc('admin_create_user', {
+            admin_token: adminToken,
             user_email: normalizedEmail,
             user_password: password
         });
@@ -84,6 +105,9 @@ export async function createUser(email, password) {
         if (createError) {
             if (createError.message?.includes('duplicate') || createError.message?.includes('unique')) {
                 return { user: null, error: 'Cet email existe déjà' };
+            }
+            if (createError.message?.includes('Unauthorized')) {
+                return { user: null, error: 'Token admin invalide' };
             }
             throw createError;
         }
@@ -100,6 +124,7 @@ export async function createUser(email, password) {
 
 /**
  * List all users (admin only)
+ * Requires valid admin token
  * @returns {Promise<{users: Array<{id: string, email: string, created_at: string}>, error: string | null}>}
  */
 export async function listUsers() {
@@ -107,13 +132,23 @@ export async function listUsers() {
         return { users: [], error: 'Supabase non configuré' };
     }
 
-    try {
-        const { data, error } = await supabase
-            .from('specrefiner_users')
-            .select('id, email, created_at')
-            .order('created_at', { ascending: false });
+    const adminToken = getAdminToken();
 
-        if (error) throw error;
+    if (!adminToken) {
+        return { users: [], error: 'Token admin non configuré (VITE_ADMIN_TOKEN)' };
+    }
+
+    try {
+        const { data, error } = await supabase.rpc('admin_list_users', {
+            admin_token: adminToken
+        });
+
+        if (error) {
+            if (error.message?.includes('Unauthorized')) {
+                return { users: [], error: 'Token admin invalide' };
+            }
+            throw error;
+        }
 
         return { users: data || [], error: null };
     } catch (e) {
@@ -124,6 +159,7 @@ export async function listUsers() {
 
 /**
  * Delete a user (admin only)
+ * Requires valid admin token
  * @param {string} userId
  * @returns {Promise<{success: boolean, error: string | null}>}
  */
@@ -132,13 +168,24 @@ export async function deleteUser(userId) {
         return { success: false, error: 'Supabase non configuré' };
     }
 
-    try {
-        const { error } = await supabase
-            .from('specrefiner_users')
-            .delete()
-            .eq('id', userId);
+    const adminToken = getAdminToken();
 
-        if (error) throw error;
+    if (!adminToken) {
+        return { success: false, error: 'Token admin non configuré (VITE_ADMIN_TOKEN)' };
+    }
+
+    try {
+        const { error } = await supabase.rpc('admin_delete_user', {
+            admin_token: adminToken,
+            target_user_id: userId
+        });
+
+        if (error) {
+            if (error.message?.includes('Unauthorized')) {
+                return { success: false, error: 'Token admin invalide' };
+            }
+            throw error;
+        }
 
         return { success: true, error: null };
     } catch (e) {
