@@ -2,8 +2,14 @@
   "hooks": {
     "UserPromptSubmit": [
       {
-        "command": ".claude/scripts/log-prompt.sh",
-        "timeout": 5000
+        "matcher": {},
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/scripts/log-prompt.sh",
+            "timeout": 5000
+          }
+        ]
       }
     ]
   }
