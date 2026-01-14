@@ -42,11 +42,15 @@ export function useSession(userId) {
     const hasInitialized = useRef(false);
     const lastSavedData = useRef(null);
     const currentUserId = useRef(null);
+    // CRITICAL: Synchronous flag to block auto-save during user switch
+    // useState is async and causes race conditions, this ref is synchronous
+    const isLoadingRef = useRef(true);
 
     // Load session when userId changes
     useEffect(() => {
         // Skip if no userId
         if (!userId) {
+            isLoadingRef.current = false;
             setIsLoading(false);
             return;
         }
@@ -56,19 +60,24 @@ export function useSession(userId) {
             return;
         }
 
+        // CRITICAL: Block auto-save SYNCHRONOUSLY via ref before anything else
+        // useState is async and causes race conditions - ref is synchronous
+        isLoadingRef.current = true;
+        setIsLoading(true);
+
         // Reset refs for new user (important: clear lastSavedData to prevent race conditions)
         hasInitialized.current = true;
         currentUserId.current = userId;
         lastSavedData.current = null;
 
         async function init() {
-            setIsLoading(true);
             setConnectionError(null);
 
             // Check connection first
             const { connected, error: connError } = await checkSupabaseConnection();
             if (!connected) {
                 setConnectionError(connError);
+                isLoadingRef.current = false;
                 setIsLoading(false);
                 return;
             }
@@ -78,6 +87,7 @@ export function useSession(userId) {
 
             if (error) {
                 setConnectionError(error);
+                isLoadingRef.current = false;
                 setIsLoading(false);
                 return;
             }
@@ -101,6 +111,7 @@ export function useSession(userId) {
                 lastSavedData.current = initialData;
             }
 
+            isLoadingRef.current = false;
             setIsLoading(false);
         }
 
@@ -109,7 +120,8 @@ export function useSession(userId) {
 
     // Auto-save on data changes (after initial load)
     useEffect(() => {
-        if (!userId || isLoading || connectionError) return;
+        // CRITICAL: Check ref first (synchronous) to prevent race condition during user switch
+        if (!userId || isLoading || isLoadingRef.current || connectionError) return;
 
         // Safety: never save if we only have the welcome message (prevents overwriting real data)
         // This can happen during race conditions when switching users
