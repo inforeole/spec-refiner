@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "command": ".claude/scripts/log-prompt.sh",
+        "timeout": 5000
+      }
+    ]
+  }
+}

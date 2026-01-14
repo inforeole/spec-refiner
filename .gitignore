@@ -22,6 +22,8 @@ Thumbs.db
 npm-debug.log*
 
 # Claude Code
-.claude/
+.claude/logs/
+.claude/report.md
+.claude/settings.local.json
 .vercel
 .env*.local

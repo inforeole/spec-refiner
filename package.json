@@ -9,7 +9,8 @@
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "postmortem": "node .claude/scripts/analyze.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.90.1",
