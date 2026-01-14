@@ -6,7 +6,11 @@
 import { useRef, useEffect } from 'react';
 import { useTTS } from './useTTS';
 
-export function useTTSMessage(messages) {
+/**
+ * @param {Array} messages - Chat messages
+ * @param {string|null} userId - Current user ID for cleanup on user change
+ */
+export function useTTSMessage(messages, userId) {
     const {
         isPlaying: isPlayingAudio,
         isLoading: isLoadingAudio,
@@ -15,7 +19,7 @@ export function useTTSMessage(messages) {
         play: playAudio,
         toggleAutoPlay,
         preloadAudio
-    } = useTTS();
+    } = useTTS(userId);
 
     const messagesEndRef = useRef(null);
     // Initialize to 0 to properly detect the first message

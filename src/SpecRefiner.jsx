@@ -52,7 +52,7 @@ export default function SpecRefiner() {
         validationDialog,
         handleValidationAction,
         handleValidationCancel
-    } = useChatInput();
+    } = useChatInput(user?.id);
 
     const { isLoading, isRegenerating, errorMessage, clearError, sendMessage, requestFinalSpec, abortRequest } = useInterviewChat(sessionHook);
 
@@ -72,7 +72,7 @@ export default function SpecRefiner() {
         autoPlayEnabled,
         playAudio,
         toggleAutoPlay
-    } = useTTSMessage(messages);
+    } = useTTSMessage(messages, user?.id);
 
     const { handleSendMessage } = useMessageFlow({
         chatInput: { inputMessage, chatFiles, clearInput, processCurrentFiles },
@@ -126,6 +126,7 @@ Dis-moi ce que tu voudrais changer ou préciser !`
     const handleLogout = () => {
         if (confirm('Voulez-vous vous déconnecter ?')) {
             abortRequest();
+            clearInput(); // Clean up pending files before logout
             logout();
         }
     };

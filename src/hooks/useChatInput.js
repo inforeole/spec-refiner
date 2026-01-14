@@ -1,13 +1,14 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { processFiles, truncateText, resizeImage, processPdfFile, processDocxFile, processTextFile } from '../utils/fileProcessing';
 import { validateFileSize, validateTextContent, isImageFile, isTextFile } from '../utils/fileValidation';
 
 /**
  * Hook pour gérer l'input du chat (message + fichiers)
  * Limité à 1 fichier à la fois, avec validation de taille
+ * @param {string|null} userId - Current user ID for cleanup on user change
  * @returns {Object} États et handlers pour le chat input
  */
-export function useChatInput() {
+export function useChatInput(userId) {
     const [inputMessage, setInputMessage] = useState('');
     const [chatFiles, setChatFiles] = useState([]);
     const [isProcessingFiles, setIsProcessingFiles] = useState(false);
@@ -21,6 +22,21 @@ export function useChatInput() {
         fileSize: '',
         extractedSize: ''
     });
+
+    // Reset all input state when userId changes (prevents data mixing between users)
+    useEffect(() => {
+        setInputMessage('');
+        setChatFiles([]);
+        setIsProcessingFiles(false);
+        setValidationDialog({
+            isOpen: false,
+            type: null,
+            file: null,
+            extractedContent: null,
+            fileSize: '',
+            extractedSize: ''
+        });
+    }, [userId]);
 
     /**
      * Extrait le contenu texte d'un fichier pour validation

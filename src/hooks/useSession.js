@@ -3,7 +3,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { loadSession, saveSession, clearSession, checkSupabaseConnection } from '../services/sessionService';
+import { loadSession, saveSession, clearSession, checkSupabaseConnection, cancelPendingSaves } from '../services/sessionService';
 import { deleteImage } from '../services/imageService';
 import { extractStorageImageUrls } from '../utils/messageUtils';
 
@@ -48,8 +48,17 @@ export function useSession(userId) {
 
     // Load session when userId changes
     useEffect(() => {
-        // Skip if no userId
+        // Cancel any pending saves from previous user to prevent race conditions
+        if (currentUserId.current && currentUserId.current !== userId) {
+            cancelPendingSaves(currentUserId.current);
+        }
+
+        // Skip if no userId (logged out)
         if (!userId) {
+            // Also cancel saves if logging out
+            if (currentUserId.current) {
+                cancelPendingSaves(currentUserId.current);
+            }
             isLoadingRef.current = false;
             setIsLoading(false);
             return;

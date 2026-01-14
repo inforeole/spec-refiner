@@ -10,6 +10,18 @@ import { TIMEOUTS } from '../config/constants';
 const saveTimeouts = new Map();
 
 /**
+ * Cancel any pending debounced saves for a user
+ * Call this when user changes to prevent race conditions
+ * @param {string} userId - The user's UUID
+ */
+export function cancelPendingSaves(userId) {
+    if (saveTimeouts.has(userId)) {
+        clearTimeout(saveTimeouts.get(userId));
+        saveTimeouts.delete(userId);
+    }
+}
+
+/**
  * Filter messages for storage
  * - Keep text content
  * - Keep Storage URLs (already uploaded images)

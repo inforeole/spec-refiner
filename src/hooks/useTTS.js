@@ -7,7 +7,10 @@ import { synthesizeSpeech } from '../services/ttsService';
 
 const STORAGE_KEY = 'spec-refiner-tts-autoplay';
 
-export function useTTS() {
+/**
+ * @param {string|null} userId - Current user ID, used to cleanup cache on user change
+ */
+export function useTTS(userId) {
     const [isPlaying, setIsPlaying] = useState(false);
     const [playingMessageId, setPlayingMessageId] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -35,6 +38,26 @@ export function useTTS() {
             audioCache.clear();
         };
     }, []);
+
+    // Cleanup when userId changes (prevents audio mixing between users)
+    useEffect(() => {
+        // Stop any playing audio
+        audioRef.current.pause();
+        audioRef.current.src = '';
+        setIsPlaying(false);
+        setPlayingMessageId(null);
+        setIsLoading(false);
+
+        // Abort pending requests
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+
+        // Clear audio cache (message indexes are not unique across users)
+        audioCacheRef.current.forEach(url => URL.revokeObjectURL(url));
+        audioCacheRef.current.clear();
+    }, [userId]);
 
     // Setup audio event listeners
     useEffect(() => {
