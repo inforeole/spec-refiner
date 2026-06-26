@@ -47,16 +47,21 @@ npm run preview      # Preview production build
 
 ## Environment Setup
 
-Create `.env` with:
+**Les secrets vivent dans Infisical** (self-hosted, `http://infisical.mesh:8080`), projet `spec-refiner` (workspaceId `398b111e-df73-4d9b-b41c-d92cb6fd7f7f`, env `dev`). **Aucun `.env` en clair** : `npm run dev/build/preview` lancent `infisical run ... -- vite` qui injecte les 6 secrets `VITE_*` dans le process (Vite expose les `VITE_*` de `process.env`).
+
+Secrets gérés dans Infisical (env `dev`) :
 ```
-VITE_OPENROUTER_API_KEY=sk-or-v1-...  # OpenRouter API key
-VITE_APP_PASSWORD=...                 # Admin password (pour /admin UI)
-VITE_ADMIN_TOKEN=...                  # Admin token for secure RPCs (server-side validation)
-VITE_SUPABASE_URL=https://xxx.supabase.co  # Supabase project URL
-VITE_SUPABASE_ANON_KEY=eyJ...              # Supabase anon/public key
+VITE_OPENROUTER_API_KEY   # OpenRouter API key (clé réactivée 2026-06-26)
+VITE_APP_PASSWORD         # Mot de passe de connexion (et /admin UI)
+VITE_ADMIN_TOKEN          # Token admin pour les RPCs sécurisées
+VITE_SUPABASE_URL         # URL projet Supabase
+VITE_SUPABASE_ANON_KEY    # Clé anon Supabase
+VITE_INWORLD_API_KEY      # TTS Inworld
 ```
 
-**Important**: `VITE_ADMIN_TOKEN` doit correspondre à `app.admin_token` dans Supabase (voir Security Setup).
+- Régénérer un `.env` local au besoin : `infisical export --domain http://infisical.mesh:8080 --env dev > .env` (ne pas commiter, `.env` est gitignored).
+- Modifier/rotater un secret : le faire dans Infisical (UI ou API REST, cf. `~/.claude/recipes/infisical-api.md`), pas en local.
+- **Important**: `VITE_ADMIN_TOKEN` doit correspondre à `app.admin_token` dans Supabase (voir Security Setup).
 
 ## Compte & Projet Supabase
 
