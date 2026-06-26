@@ -114,9 +114,9 @@ VITE_INWORLD_API_KEY      # TTS Inworld
 
 ## API Integration
 
-OpenRouter API with Claude 3.5 Sonnet:
+OpenRouter API with Claude Sonnet 4:
 - Endpoint: `https://openrouter.ai/api/v1/chat/completions`
-- Model: `anthropic/claude-3.5-sonnet`
+- Model: `anthropic/claude-sonnet-4` (défini dans `src/config/constants.js`, `API_CONFIG.MODEL`)
 - Interview conducted in French with one question at a time
 - Spec generation triggered by `[SPEC_COMPLETE]` marker in response
 
