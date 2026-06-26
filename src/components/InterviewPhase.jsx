@@ -132,11 +132,20 @@ export default function InterviewPhase({
                         {questionCount >= INTERVIEW_CONFIG.MIN_QUESTIONS_BEFORE_SPEC && !finalSpec && (
                             <button
                                 onClick={onRequestSpec}
-                                disabled={isLoading}
+                                disabled={isLoading || isRegenerating}
                                 className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2"
                             >
-                                <CheckCircle2 className="w-4 h-4" />
-                                Générer les specs
+                                {isRegenerating ? (
+                                    <>
+                                        <RefreshCw className="w-4 h-4 animate-spin" />
+                                        Génération en cours…
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCircle2 className="w-4 h-4" />
+                                        Générer les specs
+                                    </>
+                                )}
                             </button>
                         )}
                     </div>

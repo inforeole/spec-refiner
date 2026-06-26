@@ -26,6 +26,9 @@ export function useInterviewChat(sessionHook) {
     const [isRegenerating, setIsRegenerating] = useState(false);
     const [errorMessage, setErrorMessage] = useState(null);
     const abortControllerRef = useRef(null);
+    // Garde anti-réentrance : empêche plusieurs générations simultanées
+    // sur clics rapides (les setState React sont asynchrones)
+    const isRegeneratingRef = useRef(false);
 
     /**
      * Construit l'historique de conversation pour l'API
@@ -242,6 +245,11 @@ export function useInterviewChat(sessionHook) {
      * Demande la génération du spec final
      */
     const requestFinalSpec = useCallback(async () => {
+        // Empêche une génération concurrente (double-clic / clics rapides)
+        if (isRegeneratingRef.current) {
+            return false;
+        }
+        isRegeneratingRef.current = true;
         setIsRegenerating(true);
 
         const conversationHistory = buildConversationHistory({
@@ -262,12 +270,10 @@ RÈGLES OBLIGATOIRES:
 
             if (!isValid) {
                 alert('La génération des spécifications a échoué (réponse incohérente). Veuillez réessayer.');
-                setIsRegenerating(false);
                 return false;
             }
 
             handleSpecComplete(response);
-            setIsRegenerating(false);
             return true;
         } catch (error) {
             if (error.name === 'AbortError') {
@@ -286,8 +292,10 @@ RÈGLES OBLIGATOIRES:
                 alert(`Erreur: ${error.message}`);
             }
 
-            setIsRegenerating(false);
             return false;
+        } finally {
+            isRegeneratingRef.current = false;
+            setIsRegenerating(false);
         }
     }, [buildConversationHistory, callAPI, handleSpecComplete]);
 
@@ -300,6 +308,7 @@ RÈGLES OBLIGATOIRES:
             abortControllerRef.current = null;
         }
         setIsLoading(false);
+        isRegeneratingRef.current = false;
         setIsRegenerating(false);
     }, []);
 
