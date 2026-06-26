@@ -16,7 +16,7 @@
 CREATE OR REPLACE FUNCTION login_user_secure(user_email text, user_password text)
 RETURNS TABLE(user_id uuid, user_email_out text)
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 LANGUAGE plpgsql
 AS $$
 DECLARE
@@ -35,7 +35,7 @@ BEGIN
 
     -- Verify password using pgcrypto
     IF found_user.password_hash = crypt(user_password, found_user.password_hash) THEN
-        RETURN QUERY SELECT found_user.id, found_user.email;
+        RETURN QUERY SELECT found_user.id, found_user.email::text;
     END IF;
 
     -- Invalid password - return empty
@@ -97,7 +97,7 @@ BEGIN
     END IF;
 
     RETURN QUERY
-    SELECT u.id, u.email, u.created_at
+    SELECT u.id, u.email::text, u.created_at
     FROM specrefiner_users u
     ORDER BY u.created_at DESC;
 END;
@@ -278,7 +278,7 @@ ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
 CREATE OR REPLACE FUNCTION create_user(user_email text, user_password text)
 RETURNS uuid
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 LANGUAGE plpgsql
 AS $$
 DECLARE
@@ -298,7 +298,7 @@ $$;
 CREATE OR REPLACE FUNCTION verify_password(input_password text, stored_hash text)
 RETURNS boolean
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 LANGUAGE plpgsql
 AS $$
 BEGIN
