@@ -58,6 +58,14 @@ VITE_SUPABASE_ANON_KEY=eyJ...              # Supabase anon/public key
 
 **Important**: `VITE_ADMIN_TOKEN` doit correspondre à `app.admin_token` dans Supabase (voir Security Setup).
 
+## Compte & Projet Supabase
+
+- **Projet Supabase** : `shared-projects` — ref `xsmtfilcpmubfpraykwb` (`https://xsmtfilcpmubfpraykwb.supabase.co`)
+- **Compte de login dashboard** : `prestainforeole+1@gmail.com`
+- **Projet PARTAGÉ avec `prospectminer`** (même DB). Isolation par préfixe de tables : `specrefiner_*` (spec-refiner) vs `pm_*` (prospectminer). Ne jamais supposer que la DB est dédiée à spec-refiner.
+- La clé anon a déjà été rotatée une fois (fév. 2026) : si `Invalid API key`, reprendre la clé valide depuis `~/dv/prospectminer/.env.local` (même projet) ou le dashboard.
+- Pour rejouer la migration de sécurité : accès DDL requis (SQL Editor du dashboard ou connection string Postgres), la clé anon ne suffit pas.
+
 ## Architecture
 
 **Single-Page React Application** with quatre phases utilisateur:
