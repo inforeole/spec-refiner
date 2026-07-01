@@ -54,12 +54,34 @@ export async function loginUser(email, password) {
 
         const userData = data[0];
         return {
-            user: { id: userData.user_id, email: userData.user_email_out },
+            user: {
+                id: userData.user_id,
+                email: userData.user_email_out,
+                // Token de session pour authentifier les Edge Functions proxy
+                sessionToken: userData.session_token
+            },
             error: null
         };
     } catch (e) {
         console.error('Login failed:', e);
         return { user: null, error: `Erreur de connexion: ${e.message}` };
+    }
+}
+
+/**
+ * Invalide le token de session côté serveur (logout).
+ * Best-effort: n'échoue pas l'UX si l'appel réseau rate.
+ * @param {string} sessionToken
+ * @returns {Promise<void>}
+ */
+export async function logoutSession(sessionToken) {
+    if (!isSupabaseConfigured() || !sessionToken) {
+        return;
+    }
+    try {
+        await supabase.rpc('logout_session', { p_token: sessionToken });
+    } catch (e) {
+        console.warn('logout_session failed:', e.message);
     }
 }
 

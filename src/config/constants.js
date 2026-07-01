@@ -1,11 +1,11 @@
 // Configuration centralisée de l'application
 
 // API
+// Le modèle et l'URL OpenRouter sont désormais IMPOSÉS côté serveur (Edge
+// Function `openrouter`). Aucune clé ni cible d'API tierce dans le bundle front.
 export const API_CONFIG = {
-    MAX_TOKENS: 8192,
-    MAX_RETRIES: 2,
-    OPENROUTER_URL: 'https://openrouter.ai/api/v1/chat/completions',
-    MODEL: 'anthropic/claude-sonnet-4'
+    MAX_TOKENS: 8192,   // plafonné à nouveau côté serveur
+    MAX_RETRIES: 2
 };
 
 // Timeouts (en ms)
@@ -25,11 +25,6 @@ export const MARKERS = {
     SPEC_COMPLETE: '[SPEC_COMPLETE]'
 };
 
-// Text-to-Speech (Inworld AI)
-export const TTS_CONFIG = {
-    ENDPOINT: 'https://api.inworld.ai/tts/v1/voice',
-    MODEL: 'inworld-tts-1-max',
-    VOICE_ID: 'default-o-lizv8yves-5uhgzcrjog__vanessa',
-    SPEAKING_RATE: 1,
-    TEMPERATURE: 1.1
-};
+// La config Text-to-Speech (endpoint, voix, modèle Inworld) est désormais
+// imposée côté serveur dans l'Edge Function `inworld`. Le front n'envoie que le
+// texte à synthétiser.

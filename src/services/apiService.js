@@ -1,36 +1,30 @@
 /**
- * Service API pour les appels à OpenRouter
+ * Service API pour le chat d'interview.
+ *
+ * Passe par l'Edge Function proxy `openrouter` (qui détient la clé côté serveur
+ * et impose le modèle + le plafond de tokens). Aucune clé API n'est présente
+ * dans le bundle front.
  */
 
 import { API_CONFIG } from '../config/constants';
+import { functionUrl, functionHeaders } from '../lib/apiClient';
 import { isValidResponse } from '../utils/responseValidation';
 
 /**
- * Appelle l'API OpenRouter avec les messages fournis
+ * Appelle le proxy OpenRouter avec les messages fournis
  * @param {Object} options
  * @param {Array} options.messages - Messages de la conversation (incluant le system prompt)
  * @param {AbortSignal} [options.signal] - Signal pour annuler la requête
  * @returns {Promise<string>} Contenu de la réponse
- * @throws {Error} Si la clé API est manquante ou si l'appel échoue
+ * @throws {Error} Si l'utilisateur n'est pas authentifié ou si l'appel échoue
  */
 export async function callOpenRouterAPI({ messages, signal }) {
-    const apiKey = import.meta.env.VITE_OPENROUTER_API_KEY;
-    if (!apiKey) {
-        throw new Error('Clé API manquante. Ajoutez VITE_OPENROUTER_API_KEY dans le fichier .env');
-    }
-
-    const response = await fetch(API_CONFIG.OPENROUTER_URL, {
+    const response = await fetch(functionUrl('openrouter'), {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
-            'HTTP-Referer': window.location.origin,
-            'X-Title': 'Spec Refiner',
-        },
+        headers: functionHeaders(),
         body: JSON.stringify({
-            model: API_CONFIG.MODEL,
-            max_tokens: API_CONFIG.MAX_TOKENS,
-            messages
+            messages,
+            maxTokens: API_CONFIG.MAX_TOKENS,
         }),
         signal
     });

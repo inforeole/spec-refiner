@@ -1,0 +1,13 @@
+# Supabase project config
+# Projet: shared-projects (partagé avec prospectminer)
+project_id = "xsmtfilcpmubfpraykwb"
+
+# Edge Functions proxy: les clés API tierces vivent côté serveur (secrets),
+# plus jamais dans le bundle front.
+# verify_jwt = true => l'anon key (publique par design) est exigée en plus du
+# X-Session-Token applicatif vérifié dans le code de la function.
+[functions.openrouter]
+verify_jwt = true
+
+[functions.inworld]
+verify_jwt = true
