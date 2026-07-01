@@ -47,7 +47,9 @@ npm run preview      # Preview production build
 
 ## Environment Setup
 
-**Les secrets vivent dans Infisical** (self-hosted, `http://infisical.mesh:8080`), projet `spec-refiner` (workspaceId `398b111e-df73-4d9b-b41c-d92cb6fd7f7f`, env `dev`). **Aucun `.env` en clair** : `npm run dev/build/preview` lancent `infisical run ... -- vite` qui injecte les 6 secrets `VITE_*` dans le process (Vite expose les `VITE_*` de `process.env`).
+**Les secrets vivent dans Infisical** (self-hosted, `http://infisical.mesh:8080`), projet `spec-refiner` (workspaceId `398b111e-df73-4d9b-b41c-d92cb6fd7f7f`, env `dev`). **Aucun `.env` en clair** : `npm run dev/build/preview` lancent `infisical run ... -- vite` qui injecte les secrets `VITE_*` dans le process (Vite expose les `VITE_*` de `process.env`).
+
+> ⚠️ **Depuis la fuite du 2026-07-01** : plus AUCUN secret en var `VITE_*` (le préfixe inline la valeur dans le bundle public). Les clés API tierces (OpenRouter, Inworld) passent par des Edge Functions proxy (secrets serveur `OPENROUTER_API_KEY` / `INWORLD_API_KEY`) ; l'accès admin repose sur le token de session + `is_admin` (migration 003). Seuls `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (publics, protégés RLS) restent côté client. Les 4 autres (`VITE_OPENROUTER_API_KEY`, `VITE_INWORLD_API_KEY`, `VITE_ADMIN_TOKEN`, `VITE_APP_PASSWORD`) sont à SUPPRIMER d'Infisical + Vercel.
 
 Secrets gérés dans Infisical (env `dev`) :
 ```
@@ -61,7 +63,7 @@ VITE_INWORLD_API_KEY      # TTS Inworld
 
 - Régénérer un `.env` local au besoin : `infisical export --domain http://infisical.mesh:8080 --env dev > .env` (ne pas commiter, `.env` est gitignored).
 - Modifier/rotater un secret : le faire dans Infisical (UI ou API REST, cf. `~/.claude/recipes/infisical-api.md`), pas en local.
-- **Important**: `VITE_ADMIN_TOKEN` doit correspondre à `app.admin_token` dans Supabase (voir Security Setup).
+- **Admin** : l'accès `/admin` et les RPC admin exigent un compte `is_admin` (vérifié serveur via le token de session, migration 003). Plus de `VITE_ADMIN_TOKEN` ni `app.admin_token`.
 
 ## Compte & Projet Supabase
 
@@ -82,14 +84,14 @@ VITE_INWORLD_API_KEY      # TTS Inworld
 **Authentification Multi-Users (Supabase):**
 - Table `specrefiner_users` : id, email, password_hash, created_at
 - Hashage via pgcrypto (fonctions RPC `create_user`, `verify_password`)
-- Page admin `/admin` : création/suppression d'utilisateurs (protégée par `VITE_APP_PASSWORD`)
+- Page admin `/admin` : création/suppression d'utilisateurs (réservée aux comptes `is_admin`, vérifié serveur via le token de session ; migration 003)
 
 **Security Architecture (Row Level Security):**
 - RLS activé sur `specrefiner_users` et `specrefiner_sessions`
 - Toutes les opérations passent par des RPCs `SECURITY DEFINER`
 - Pas d'accès direct aux tables depuis le client
 - RPCs sécurisées : `login_user_secure`, `load_user_session`, `save_user_session`, `clear_user_session`
-- RPCs admin : `admin_create_user`, `admin_list_users`, `admin_delete_user` (requièrent `admin_token`)
+- RPCs admin : `admin_create_user`, `admin_list_users`, `admin_delete_user` (exigent `p_session_token` d'un compte `is_admin` ; helpers `assert_session_admin` / `is_session_admin`)
 
 **Key Files:**
 - `src/SpecRefiner.jsx` - Main component (handles all phases)
