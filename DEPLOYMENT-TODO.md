@@ -3,7 +3,8 @@
 > Statut au **2026-07-29** : migrations, Edge Functions et frontend déployés.
 > Les proxies refusent les requêtes sans session avec un HTTP 401.
 > La connexion publique fonctionne et le bundle de production ne contient plus les clés tierces.
-> L’IA et le TTS resteront indisponibles tant que les nouvelles clés serveur ne sont pas ajoutées.
+> L’IA reste indisponible car `OPENROUTER_API_KEY` manque côté serveur.
+> `INWORLD_API_KEY` est présent, mais le TTS n'a pas été testé avec un compte réel.
 
 ## Contexte
 
@@ -22,6 +23,8 @@ Les anciennes clés OpenRouter et Inworld ont été révoquées.
 - Les deux Edge Functions sont déployées avec `verify_jwt=false`.
 - Les deux fonctions valident le token de session côté serveur.
 - Les deux fonctions renvoient HTTP 401 sans token de session.
+- `INWORLD_API_KEY` est configuré dans les secrets Edge Functions.
+- `OPENROUTER_API_KEY` manque dans les secrets Edge Functions et dans Infisical.
 - `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` sont configurées dans Vercel.
 - Le frontend sécurisé est déployé sur `https://spec.inforeole.fr`.
 - Le RPC de connexion répond HTTP 200 avec la clé publique actuellement servie.
@@ -32,14 +35,13 @@ Les anciennes clés OpenRouter et Inworld ont été révoquées.
 ## Actions manuelles requises
 
 1. Créer une nouvelle clé OpenRouter limitée au besoin de Spec Refiner.
-2. Créer une nouvelle clé standard Inworld et copier la signature Basic en Base64.
-3. Ajouter les deux valeurs dans les secrets Edge Functions Supabase sous les noms `OPENROUTER_API_KEY` et `INWORLD_API_KEY`.
-4. Ajouter les mêmes secrets dans Infisical, projet `spec-refiner`, sans préfixe `VITE_`.
-5. Ne jamais coller ces clés dans une conversation, un commit ou une variable Vite.
+2. Ajouter la valeur dans les secrets Edge Functions Supabase sous le nom `OPENROUTER_API_KEY`.
+3. Ajouter le même secret dans Infisical, projet `spec-refiner`, sans préfixe `VITE_`.
+4. Ne jamais coller cette clé dans une conversation, un commit ou une variable Vite.
 
 ## Étapes restantes
 
-1. Configurer les deux secrets serveur.
+1. Configurer le secret serveur OpenRouter.
 2. Tester en production avec un compte réel un échange d’interview, une lecture TTS et une génération de spécification.
 3. Vérifier dans les logs OpenRouter que seul le modèle autorisé est utilisé.
 4. Supprimer dans Infisical les anciennes variables `VITE_OPENROUTER_API_KEY`, `VITE_INWORLD_API_KEY`, `VITE_ADMIN_TOKEN` et `VITE_APP_PASSWORD` si elles existent encore.
