@@ -52,6 +52,7 @@ Le déploiement de sécurité suit cet ordre:
 4. Vérifier les parcours de connexion, session, entretien, génération et réinitialisation.
 
 La migration `20260729194159_secure_session_rpcs.sql` doit être appliquée avant le client qui appelle les RPC de session v2.
+La migration `20260729201527_fix_api_rate_limit_conflict.sql` corrige le rate limiter des proxies IA et doit être appliquée après celle-ci.
 
 Les anciennes RPC de session doivent être révoquées dans une migration séparée seulement après validation du client v2 en production.
 

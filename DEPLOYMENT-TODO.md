@@ -15,7 +15,7 @@ Les anciennes clés OpenRouter et Inworld ont été révoquées.
 
 - Les Edge Functions `openrouter` et `inworld` détiennent les clés côté serveur.
 - Le modèle, la taille des requêtes, le nombre de tokens et les délais sont bornés côté serveur.
-- Les migrations 001, 002, 003 et 20260729150938 sont appliquées au projet `xsmtfilcpmubfpraykwb`.
+- Les migrations 001, 002, 003, 20260729150938, 20260729194159 et 20260729201527 sont appliquées au projet `xsmtfilcpmubfpraykwb`.
 - `login_user_secure` émet un token de session opaque.
 - L’accès admin utilise le token de session et le flag `is_admin`.
 - Le rate limit est atomique par utilisateur et par proxy.
@@ -53,16 +53,20 @@ Les anciennes clés OpenRouter et Inworld ont été révoquées.
 ## Dette de sécurité séparée
 
 L’audit Supabase signale que les anciennes RPC `load_user_session`, `save_user_session` et `clear_user_session` autorisent encore l’accès par simple identifiant utilisateur.
-La migration `20260729194159_secure_session_rpcs.sql` et le client v2 corrigent ce contrat, mais ne sont pas déployés au moment de cette mise à jour.
+La migration `20260729194159_secure_session_rpcs.sql` et le client v2 sont déployés depuis le 29 juillet 2026.
+La migration `20260729201527_fix_api_rate_limit_conflict.sql` corrige également l'ambiguïté SQL découverte par le lint distant dans le rate limiter.
+Le domaine `https://spec.inforeole.fr` sert le bundle v2.
+Les RPC v2 refusent les tokens invalides et l'appel direct à `create_user` est interdit au rôle anonyme.
 La sécurité des sessions ne doit pas être considérée comme complète avant la révocation effective des trois anciennes signatures.
 
 Ordre obligatoire:
 
-1. Appliquer `20260729194159_secure_session_rpcs.sql`.
-2. Déployer le client qui appelle les RPC v2.
-3. Vérifier en production le chargement, la sauvegarde et la réinitialisation avec deux comptes distincts.
-4. Générer avec la CLI Supabase une migration séparée qui révoque `load_user_session(uuid)`, `save_user_session(uuid, jsonb, text, integer, text, boolean, integer)` et `clear_user_session(uuid)` pour `PUBLIC`, `anon` et `authenticated`.
-5. Appliquer cette migration de révocation.
-6. Contrôler les ACL effectives en base avant de fermer cette dette.
+1. [x] Appliquer `20260729194159_secure_session_rpcs.sql`.
+2. [x] Appliquer `20260729201527_fix_api_rate_limit_conflict.sql`.
+3. [x] Déployer le client qui appelle les RPC v2.
+4. [ ] Vérifier en production le chargement, la sauvegarde et la réinitialisation avec deux comptes distincts.
+5. [ ] Générer avec la CLI Supabase une migration séparée qui révoque `load_user_session(uuid)`, `save_user_session(uuid, jsonb, text, integer, text, boolean, integer)` et `clear_user_session(uuid)` pour `PUBLIC`, `anon` et `authenticated`.
+6. [ ] Appliquer cette migration de révocation.
+7. [ ] Contrôler les ACL effectives en base avant de fermer cette dette.
 
 Les alertes sur les tables `pm_*` appartiennent à ProspectMiner et ne doivent pas être corrigées depuis ce dépôt.
