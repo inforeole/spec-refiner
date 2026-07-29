@@ -40,6 +40,8 @@ USING (false);
 -- ============================================================================
 -- La signature de sortie ajoute session_token en dernier. Les anciens clients
 -- qui lisent user_id / user_email_out continuent de fonctionner.
+DROP FUNCTION IF EXISTS login_user_secure(text, text);
+
 CREATE OR REPLACE FUNCTION login_user_secure(user_email text, user_password text)
 RETURNS TABLE(user_id uuid, user_email_out text, session_token uuid)
 SECURITY DEFINER
