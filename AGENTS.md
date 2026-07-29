@@ -129,6 +129,14 @@ OpenRouter API avec Claude Sonnet 4 :
 - Interview conducted in French with one question at a time
 - Spec generation triggered by `[SPEC_COMPLETE]` marker in response
 
+Inworld TTS :
+- Endpoint front : `${VITE_SUPABASE_URL}/functions/v1/inworld`
+- Endpoint amont : `https://api.inworld.ai/tts/v1/voice`, appelé uniquement par l'Edge Function
+- Modèle imposé côté serveur : `inworld-tts-1.5-mini`
+- Voix imposée côté serveur : `default-o-lizv8yves-5uhgzcrjog__ok`
+- Débit : `0.8`
+- Le contrat de requête est centralisé dans `supabase/functions/inworld/config.ts`.
+
 ## File Processing
 
 Supports: Images (base64), PDF (text extraction), DOCX (text extraction), TXT, MD

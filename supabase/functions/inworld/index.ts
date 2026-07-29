@@ -12,12 +12,9 @@ import {
   readJsonBody,
   UpstreamTimeoutError,
 } from "../_shared/request.ts";
+import { buildInworldRequestBody } from "./config.ts";
 
 const TTS_ENDPOINT = "https://api.inworld.ai/tts/v1/voice";
-const VOICE_ID = "default-o-lizv8yves-5uhgzcrjog__vanessa";
-const MODEL_ID = "inworld-tts-1-max";
-const SPEAKING_RATE = 1;
-const TEMPERATURE = 1.1;
 const MAX_TEXT_LEN = 1000; // borne serveur pour limiter l'abus
 const MAX_REQUEST_BYTES = 16_000;
 const UPSTREAM_TIMEOUT_MS = 30_000;
@@ -89,13 +86,9 @@ Deno.serve(async (req: Request) => {
           "Content-Type": "application/json",
           "Authorization": `Basic ${apiKey}`,
         },
-        body: JSON.stringify({
-          text: text.slice(0, MAX_TEXT_LEN),
-          voiceId: VOICE_ID,
-          modelId: MODEL_ID,
-          audioConfig: { audioEncoding: "MP3", speakingRate: SPEAKING_RATE },
-          temperature: TEMPERATURE,
-        }),
+        body: JSON.stringify(
+          buildInworldRequestBody(text.slice(0, MAX_TEXT_LEN)),
+        ),
       },
       UPSTREAM_TIMEOUT_MS,
     );
