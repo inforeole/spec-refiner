@@ -1,8 +1,8 @@
 # TODO - Finalisation du déploiement sécurité
 
-> Statut au **2026-07-29** : migrations et Edge Functions déployées.
+> Statut au **2026-07-29** : migrations, Edge Functions et frontend déployés.
 > Les proxies refusent les requêtes sans session avec un HTTP 401.
-> Le frontend sécurisé est prêt à être déployé.
+> La connexion publique fonctionne et le bundle de production ne contient plus les clés tierces.
 > L’IA et le TTS resteront indisponibles tant que les nouvelles clés serveur ne sont pas ajoutées.
 
 ## Contexte
@@ -23,8 +23,11 @@ Les anciennes clés OpenRouter et Inworld ont été révoquées.
 - Les deux fonctions valident le token de session côté serveur.
 - Les deux fonctions renvoient HTTP 401 sans token de session.
 - `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` sont configurées dans Vercel.
+- Le frontend sécurisé est déployé sur `https://spec.inforeole.fr`.
+- Le RPC de connexion répond HTTP 200 avec la clé publique actuellement servie.
+- Une tentative avec un compte fictif renvoie `Email ou mot de passe incorrect` et non `Invalid API key`.
 - Les tests de sécurité, le lint et le build Vercel local passent.
-- Le bundle construit ne contient aucune clé OpenRouter ni endpoint tiers direct.
+- Le bundle servi est identique au bundle construit et ne contient aucune clé OpenRouter ni endpoint tiers direct.
 
 ## Actions manuelles requises
 
@@ -37,10 +40,9 @@ Les anciennes clés OpenRouter et Inworld ont été révoquées.
 ## Étapes restantes
 
 1. Configurer les deux secrets serveur.
-2. Redéployer le frontend Vercel.
-3. Tester en production le login, un échange d’interview, une lecture TTS et une génération de spécification.
-4. Vérifier que les appels sans `X-Session-Token` restent refusés.
-5. Supprimer dans Infisical les anciennes variables `VITE_OPENROUTER_API_KEY`, `VITE_INWORLD_API_KEY`, `VITE_ADMIN_TOKEN` et `VITE_APP_PASSWORD` si elles existent encore.
+2. Tester en production avec un compte réel un échange d’interview, une lecture TTS et une génération de spécification.
+3. Vérifier dans les logs OpenRouter que seul le modèle autorisé est utilisé.
+4. Supprimer dans Infisical les anciennes variables `VITE_OPENROUTER_API_KEY`, `VITE_INWORLD_API_KEY`, `VITE_ADMIN_TOKEN` et `VITE_APP_PASSWORD` si elles existent encore.
 
 ## Vérifications de sécurité post-déploiement
 
