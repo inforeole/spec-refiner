@@ -1,19 +1,15 @@
 /**
  * User authentication and management service
  * Uses secure RPC functions - never exposes password_hash to client
+ *
+ * Autorisation admin: repose sur le token de session (émis au login, vérifié
+ * côté serveur) + le flag is_admin. Plus aucun secret admin dans le bundle front
+ * (ni VITE_ADMIN_TOKEN, ni VITE_APP_PASSWORD).
  */
 
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { getSessionToken } from '../lib/apiClient';
 import { validateEmail, validatePassword, sanitizeEmail } from '../utils/validation';
-
-/**
- * Get admin token from environment
- * @returns {string|null}
- */
-function getAdminToken() {
-    const token = import.meta.env.VITE_ADMIN_TOKEN;
-    return token ? token.replace(/^["']|["']$/g, '').trim() : null;
-}
 
 /**
  * Login user with email and password
@@ -54,7 +50,12 @@ export async function loginUser(email, password) {
 
         const userData = data[0];
         return {
-            user: { id: userData.user_id, email: userData.user_email_out },
+            user: {
+                id: userData.user_id,
+                email: userData.user_email_out,
+                // Token de session pour authentifier les Edge Functions proxy
+                sessionToken: userData.session_token
+            },
             error: null
         };
     } catch (e) {
@@ -64,8 +65,53 @@ export async function loginUser(email, password) {
 }
 
 /**
+ * Invalide le token de session côté serveur (logout).
+ * Best-effort: n'échoue pas l'UX si l'appel réseau rate.
+ * @param {string} sessionToken
+ * @returns {Promise<void>}
+ */
+export async function logoutSession(sessionToken) {
+    if (!isSupabaseConfigured() || !sessionToken) {
+        return;
+    }
+    try {
+        await supabase.rpc('logout_session', { p_token: sessionToken });
+    } catch (e) {
+        console.warn('logout_session failed:', e.message);
+    }
+}
+
+/**
+ * Indique si l'utilisateur connecté est administrateur.
+ * Vérifié côté serveur (token de session + flag is_admin), jamais dans le front.
+ * @returns {Promise<boolean>}
+ */
+export async function checkIsAdmin() {
+    if (!isSupabaseConfigured()) {
+        return false;
+    }
+    const sessionToken = getSessionToken();
+    if (!sessionToken) {
+        return false;
+    }
+    try {
+        const { data, error } = await supabase.rpc('is_session_admin', {
+            p_session_token: sessionToken
+        });
+        if (error) {
+            console.error('is_session_admin error:', error);
+            return false;
+        }
+        return data === true;
+    } catch (e) {
+        console.error('checkIsAdmin failed:', e);
+        return false;
+    }
+}
+
+/**
  * Create a new user (admin only)
- * Requires valid admin token
+ * L'autorisation est vérifiée côté serveur via le token de session + is_admin.
  * @param {string} email
  * @param {string} password
  * @returns {Promise<{user: {id: string, email: string} | null, error: string | null}>}
@@ -88,16 +134,16 @@ export async function createUser(email, password) {
     }
 
     const normalizedEmail = sanitizeEmail(email);
-    const adminToken = getAdminToken();
+    const sessionToken = getSessionToken();
 
-    if (!adminToken) {
-        return { user: null, error: 'Token admin non configuré (VITE_ADMIN_TOKEN)' };
+    if (!sessionToken) {
+        return { user: null, error: 'Session expirée. Reconnecte-toi.' };
     }
 
     try {
-        // Use admin RPC with token validation
+        // RPC admin: autorisation par token de session + is_admin (côté serveur)
         const { data: userId, error: createError } = await supabase.rpc('admin_create_user', {
-            admin_token: adminToken,
+            p_session_token: sessionToken,
             user_email: normalizedEmail,
             user_password: password
         });
@@ -107,7 +153,7 @@ export async function createUser(email, password) {
                 return { user: null, error: 'Cet email existe déjà' };
             }
             if (createError.message?.includes('Unauthorized')) {
-                return { user: null, error: 'Token admin invalide' };
+                return { user: null, error: 'Accès réservé aux administrateurs' };
             }
             throw createError;
         }
@@ -124,7 +170,7 @@ export async function createUser(email, password) {
 
 /**
  * List all users (admin only)
- * Requires valid admin token
+ * L'autorisation est vérifiée côté serveur via le token de session + is_admin.
  * @returns {Promise<{users: Array<{id: string, email: string, created_at: string}>, error: string | null}>}
  */
 export async function listUsers() {
@@ -132,20 +178,20 @@ export async function listUsers() {
         return { users: [], error: 'Supabase non configuré' };
     }
 
-    const adminToken = getAdminToken();
+    const sessionToken = getSessionToken();
 
-    if (!adminToken) {
-        return { users: [], error: 'Token admin non configuré (VITE_ADMIN_TOKEN)' };
+    if (!sessionToken) {
+        return { users: [], error: 'Session expirée. Reconnecte-toi.' };
     }
 
     try {
         const { data, error } = await supabase.rpc('admin_list_users', {
-            admin_token: adminToken
+            p_session_token: sessionToken
         });
 
         if (error) {
             if (error.message?.includes('Unauthorized')) {
-                return { users: [], error: 'Token admin invalide' };
+                return { users: [], error: 'Accès réservé aux administrateurs' };
             }
             throw error;
         }
@@ -159,7 +205,7 @@ export async function listUsers() {
 
 /**
  * Delete a user (admin only)
- * Requires valid admin token
+ * L'autorisation est vérifiée côté serveur via le token de session + is_admin.
  * @param {string} userId
  * @returns {Promise<{success: boolean, error: string | null}>}
  */
@@ -168,21 +214,21 @@ export async function deleteUser(userId) {
         return { success: false, error: 'Supabase non configuré' };
     }
 
-    const adminToken = getAdminToken();
+    const sessionToken = getSessionToken();
 
-    if (!adminToken) {
-        return { success: false, error: 'Token admin non configuré (VITE_ADMIN_TOKEN)' };
+    if (!sessionToken) {
+        return { success: false, error: 'Session expirée. Reconnecte-toi.' };
     }
 
     try {
         const { error } = await supabase.rpc('admin_delete_user', {
-            admin_token: adminToken,
+            p_session_token: sessionToken,
             target_user_id: userId
         });
 
         if (error) {
             if (error.message?.includes('Unauthorized')) {
-                return { success: false, error: 'Token admin invalide' };
+                return { success: false, error: 'Accès réservé aux administrateurs' };
             }
             throw error;
         }

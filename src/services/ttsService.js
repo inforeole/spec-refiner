@@ -1,8 +1,12 @@
 /**
- * Service TTS pour la synthèse vocale via Inworld AI
+ * Service TTS pour la synthèse vocale via Inworld AI.
+ *
+ * Passe par l'Edge Function proxy `inworld` (qui détient la clé côté serveur et
+ * impose les paramètres de voix). Aucune clé API dans le bundle front.
+ * La préparation/nettoyage du texte reste côté client (logique de présentation).
  */
 
-import { TTS_CONFIG } from '../config/constants';
+import { functionUrl, functionHeaders } from '../lib/apiClient';
 
 /**
  * Extrait le résumé audio du message (balise [AUDIO]...[/AUDIO])
@@ -74,39 +78,22 @@ function prepareTextForTTS(text) {
 }
 
 /**
- * Synthétise du texte en audio via l'API Inworld
+ * Synthétise du texte en audio via le proxy Inworld
  * @param {string} text - Texte à convertir en audio
  * @param {AbortSignal} [signal] - Signal pour annuler la requête
  * @returns {Promise<{audio: Blob|null, error: string|null}>}
  */
 export async function synthesizeSpeech(text, signal) {
-    const apiKey = import.meta.env.VITE_INWORLD_API_KEY;
-    if (!apiKey) {
-        return { audio: null, error: 'Clé API Inworld manquante' };
-    }
-
     const ttsText = prepareTextForTTS(text);
     if (!ttsText) {
         return { audio: null, error: 'Texte vide après préparation' };
     }
 
     try {
-        const response = await fetch(TTS_CONFIG.ENDPOINT, {
+        const response = await fetch(functionUrl('inworld'), {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Basic ${apiKey}`
-            },
-            body: JSON.stringify({
-                text: ttsText,
-                voiceId: TTS_CONFIG.VOICE_ID,
-                modelId: TTS_CONFIG.MODEL,
-                audioConfig: {
-                    audioEncoding: 'MP3',
-                    speakingRate: TTS_CONFIG.SPEAKING_RATE
-                },
-                temperature: TTS_CONFIG.TEMPERATURE
-            }),
+            headers: functionHeaders(),
+            body: JSON.stringify({ text: ttsText }),
             signal
         });
 

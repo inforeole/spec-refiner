@@ -1,0 +1,14 @@
+# Supabase project config
+# Projet: shared-projects (partagé avec prospectminer)
+project_id = "xsmtfilcpmubfpraykwb"
+
+# Edge Functions proxy: les clés API tierces vivent côté serveur (secrets),
+# plus jamais dans le bundle front.
+# L'authentification est gérée dans chaque function par un token de session
+# applicatif vérifié côté serveur. La vérification JWT plateforme est donc
+# désactivée pour éviter deux mécanismes d'auth concurrents.
+[functions.openrouter]
+verify_jwt = false
+
+[functions.inworld]
+verify_jwt = false

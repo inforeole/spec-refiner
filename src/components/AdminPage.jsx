@@ -1,14 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Shield, UserPlus, Trash2, ArrowLeft, Loader2 } from 'lucide-react';
-import { createUser, listUsers, deleteUser } from '../services/userService';
-
-const ADMIN_STORAGE_KEY = 'spec-refiner-admin-auth';
+import { createUser, listUsers, deleteUser, checkIsAdmin } from '../services/userService';
 
 export default function AdminPage() {
-    // Admin auth state
-    const [isAdminAuth, setIsAdminAuth] = useState(false);
-    const [adminPassword, setAdminPassword] = useState('');
-    const [adminError, setAdminError] = useState(false);
+    // Autorisation admin: 'checking' | 'authorized' | 'denied'
+    // Vérifiée côté serveur (token de session + is_admin), plus de mot de passe client.
+    const [adminState, setAdminState] = useState('checking');
 
     // User management state
     const [users, setUsers] = useState([]);
@@ -22,20 +19,24 @@ export default function AdminPage() {
     const [createError, setCreateError] = useState(null);
     const [createSuccess, setCreateSuccess] = useState(null);
 
-    // Check admin auth on mount
+    // Vérifie l'autorisation admin au montage (serveur)
     useEffect(() => {
-        const storedAuth = sessionStorage.getItem(ADMIN_STORAGE_KEY);
-        if (storedAuth === 'true') {
-            setIsAdminAuth(true);
-        }
+        let cancelled = false;
+        (async () => {
+            const ok = await checkIsAdmin();
+            if (!cancelled) {
+                setAdminState(ok ? 'authorized' : 'denied');
+            }
+        })();
+        return () => { cancelled = true; };
     }, []);
 
-    // Load users when admin is authenticated
+    // Load users once authorized
     useEffect(() => {
-        if (isAdminAuth) {
+        if (adminState === 'authorized') {
             loadUsers();
         }
-    }, [isAdminAuth]);
+    }, [adminState]);
 
     const loadUsers = async () => {
         setIsLoadingUsers(true);
@@ -47,20 +48,6 @@ export default function AdminPage() {
             setUsers(userList);
         }
         setIsLoadingUsers(false);
-    };
-
-    const handleAdminLogin = (e) => {
-        e.preventDefault();
-        const correctPassword = (import.meta.env.VITE_APP_PASSWORD || '')
-            .replace(/^["']|["']$/g, '')
-            .trim();
-        if (adminPassword === correctPassword) {
-            setIsAdminAuth(true);
-            setAdminError(false);
-            sessionStorage.setItem(ADMIN_STORAGE_KEY, 'true');
-        } else {
-            setAdminError(true);
-        }
     };
 
     const handleCreateUser = useCallback(async (e) => {
@@ -100,8 +87,17 @@ export default function AdminPage() {
         window.location.href = '/';
     };
 
-    // Admin login form
-    if (!isAdminAuth) {
+    // Vérification en cours
+    if (adminState === 'checking') {
+        return (
+            <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
+                <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+            </div>
+        );
+    }
+
+    // Accès refusé (non connecté ou compte non-admin)
+    if (adminState === 'denied') {
         return (
             <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
                 <div className="bg-slate-800 border border-slate-700 rounded-2xl p-8 w-full max-w-md text-center">
@@ -109,30 +105,14 @@ export default function AdminPage() {
                         <Shield className="w-8 h-8 text-white" />
                     </div>
                     <h1 className="text-2xl font-bold text-white mb-2">Administration</h1>
-                    <p className="text-slate-400 mb-6">Accès restreint</p>
-
-                    <form onSubmit={handleAdminLogin} className="space-y-4">
-                        <div>
-                            <input
-                                type="password"
-                                value={adminPassword}
-                                onChange={(e) => setAdminPassword(e.target.value)}
-                                placeholder="Mot de passe admin"
-                                className={`w-full bg-slate-900/50 border ${adminError ? 'border-red-500' : 'border-slate-600'} rounded-xl px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-amber-500`}
-                            />
-                            {adminError && <p className="text-red-400 text-sm mt-2">Mot de passe incorrect</p>}
-                        </div>
-                        <button
-                            type="submit"
-                            className="w-full bg-amber-600 hover:bg-amber-500 text-white font-medium py-3 px-6 rounded-xl transition-colors"
-                        >
-                            Accéder
-                        </button>
-                    </form>
+                    <p className="text-slate-400 mb-6">
+                        Accès réservé aux administrateurs. Connecte-toi avec un compte administrateur
+                        depuis l&apos;application.
+                    </p>
 
                     <button
                         onClick={goToApp}
-                        className="mt-4 text-slate-400 hover:text-white text-sm flex items-center justify-center gap-2 mx-auto"
+                        className="w-full bg-amber-600 hover:bg-amber-500 text-white font-medium py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2"
                     >
                         <ArrowLeft className="w-4 h-4" />
                         Retour à l&apos;application
@@ -142,7 +122,7 @@ export default function AdminPage() {
         );
     }
 
-    // Admin dashboard
+    // Admin dashboard (adminState === 'authorized')
     return (
         <div className="min-h-screen bg-slate-900 p-4 md:p-8">
             <div className="max-w-4xl mx-auto">

@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { loginUser } from '../services/userService';
-
-const AUTH_STORAGE_KEY = 'spec-refiner-auth';
+import { loginUser, logoutSession } from '../services/userService';
+import { AUTH_STORAGE_KEY } from '../lib/apiClient';
 
 /**
  * Hook pour gérer l'authentification utilisateur
@@ -48,12 +47,16 @@ export function useAuth() {
     }, [emailInput, passwordInput]);
 
     const logout = useCallback(() => {
+        // Invalide le token de session côté serveur (best-effort)
+        if (user?.sessionToken) {
+            logoutSession(user.sessionToken);
+        }
         setUser(null);
         sessionStorage.removeItem(AUTH_STORAGE_KEY);
         setEmailInput('');
         setPasswordInput('');
         setAuthError(null);
-    }, []);
+    }, [user]);
 
     return {
         user,

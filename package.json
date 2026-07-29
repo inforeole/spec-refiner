@@ -4,10 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "infisical run --domain http://infisical.mesh:8080 -- vite",
+    "build": "infisical run --domain http://infisical.mesh:8080 -- vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview",
+    "preview": "infisical run --domain http://infisical.mesh:8080 -- vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
     "postmortem": "node .claude/scripts/analyze.js"

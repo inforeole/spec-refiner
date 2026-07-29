@@ -38,25 +38,43 @@ Spec Refiner is a French-language AI-powered SaaS project specification tool. Us
 ## Build & Development Commands
 
 ```bash
-npm install          # Install dependencies
-npm run dev          # Start dev server (Vite, port 5173)
-npm run build        # Production build to dist/
-npm run lint         # ESLint (strict: --max-warnings 0)
-npm run preview      # Preview production build
+bun install          # Install dependencies
+bun run dev          # Start dev server (Vite, port 5173)
+bun run build        # Production build to dist/
+bun run lint         # ESLint (strict: --max-warnings 0)
+bun run preview      # Preview production build
 ```
 
 ## Environment Setup
 
-Create `.env` with:
+**Les secrets vivent dans Infisical** (self-hosted, `http://infisical.mesh:8080`), projet `spec-refiner` (workspaceId `398b111e-df73-4d9b-b41c-d92cb6fd7f7f`, env `dev`).
+**Aucun `.env` en clair**.
+`bun run dev/build/preview` lance `infisical run ... -- vite` pour le développement local.
+
+> ⚠️ **Depuis la fuite du 2026-07-01** : aucun secret ne doit utiliser le préfixe `VITE_`, car Vite l'intègre au bundle public.
+> Les clés OpenRouter et Inworld vivent uniquement dans les secrets des Edge Functions.
+> L'accès admin repose sur le token de session et `is_admin`.
+> Seuls `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY`, publics par conception et protégés par RLS, restent côté client.
+
+Configuration attendue :
 ```
-VITE_OPENROUTER_API_KEY=sk-or-v1-...  # OpenRouter API key
-VITE_APP_PASSWORD=...                 # Admin password (pour /admin UI)
-VITE_ADMIN_TOKEN=...                  # Admin token for secure RPCs (server-side validation)
-VITE_SUPABASE_URL=https://xxx.supabase.co  # Supabase project URL
-VITE_SUPABASE_ANON_KEY=eyJ...              # Supabase anon/public key
+VITE_SUPABASE_URL       # Public, front Vite et Vercel
+VITE_SUPABASE_ANON_KEY  # Publique, front Vite et Vercel
+OPENROUTER_API_KEY      # Secret Edge Function uniquement
+INWORLD_API_KEY         # Secret Edge Function uniquement
 ```
 
-**Important**: `VITE_ADMIN_TOKEN` doit correspondre à `app.admin_token` dans Supabase (voir Security Setup).
+- Régénérer un `.env` local au besoin : `infisical export --domain http://infisical.mesh:8080 --env dev > .env` (ne pas commiter, `.env` est gitignored).
+- Modifier/rotater un secret : le faire dans Infisical (UI ou API REST, cf. `~/.claude/recipes/infisical-api.md`), pas en local.
+- **Admin** : l'accès `/admin` et les RPC admin exigent un compte `is_admin` (vérifié serveur via le token de session, migration 003). Plus de `VITE_ADMIN_TOKEN` ni `app.admin_token`.
+
+## Compte & Projet Supabase
+
+- **Projet Supabase** : `shared-projects` — ref `xsmtfilcpmubfpraykwb` (`https://xsmtfilcpmubfpraykwb.supabase.co`)
+- **Compte de login dashboard** : `prestainforeole+1@gmail.com`
+- **Projet PARTAGÉ avec `prospectminer`** (même DB). Isolation par préfixe de tables : `specrefiner_*` (spec-refiner) vs `pm_*` (prospectminer). Ne jamais supposer que la DB est dédiée à spec-refiner.
+- La clé anon a déjà été rotatée une fois (fév. 2026) : si `Invalid API key`, reprendre la clé valide depuis `~/dv/prospectminer/.env.local` (même projet) ou le dashboard.
+- Pour rejouer la migration de sécurité : accès DDL requis (SQL Editor du dashboard ou connection string Postgres), la clé anon ne suffit pas.
 
 ## Architecture
 
@@ -69,14 +87,16 @@ VITE_SUPABASE_ANON_KEY=eyJ...              # Supabase anon/public key
 **Authentification Multi-Users (Supabase):**
 - Table `specrefiner_users` : id, email, password_hash, created_at
 - Hashage via pgcrypto (fonctions RPC `create_user`, `verify_password`)
-- Page admin `/admin` : création/suppression d'utilisateurs (protégée par `VITE_APP_PASSWORD`)
+- Page admin `/admin` : création/suppression d'utilisateurs (réservée aux comptes `is_admin`, vérifié serveur via le token de session ; migration 003)
 
 **Security Architecture (Row Level Security):**
 - RLS activé sur `specrefiner_users` et `specrefiner_sessions`
 - Toutes les opérations passent par des RPCs `SECURITY DEFINER`
 - Pas d'accès direct aux tables depuis le client
 - RPCs sécurisées : `login_user_secure`, `load_user_session`, `save_user_session`, `clear_user_session`
-- RPCs admin : `admin_create_user`, `admin_list_users`, `admin_delete_user` (requièrent `admin_token`)
+- RPCs admin : `admin_create_user`, `admin_list_users`, `admin_delete_user` (exigent `p_session_token` d'un compte `is_admin` ; helpers `assert_session_admin` / `is_session_admin`)
+- Les proxies IA exigent un token de session, imposent le modèle et les plafonds, limitent la taille des requêtes et appliquent un rate limit atomique par utilisateur.
+- La vérification JWT plateforme des Edge Functions est désactivée, car l'authentification applicative est effectuée côté serveur par `consume_specrefiner_api_rate_limit`.
 
 **Key Files:**
 - `src/SpecRefiner.jsx` - Main component (handles all phases)
@@ -101,9 +121,11 @@ VITE_SUPABASE_ANON_KEY=eyJ...              # Supabase anon/public key
 
 ## API Integration
 
-OpenRouter API with Claude 3.5 Sonnet:
-- Endpoint: `https://openrouter.ai/api/v1/chat/completions`
-- Model: `anthropic/claude-3.5-sonnet`
+OpenRouter API avec Claude Sonnet 4 :
+- Endpoint front : `${VITE_SUPABASE_URL}/functions/v1/openrouter`
+- Endpoint amont : `https://openrouter.ai/api/v1/chat/completions`, appelé uniquement par l'Edge Function
+- Modèle imposé côté serveur : `anthropic/claude-sonnet-4`
+- Limites serveur : 8 192 tokens de sortie, requête de 256 Ko, 20 appels par minute et par utilisateur
 - Interview conducted in French with one question at a time
 - Spec generation triggered by `[SPEC_COMPLETE]` marker in response
 
@@ -113,32 +135,27 @@ Supports: Images (base64), PDF (text extraction), DOCX (text extraction), TXT, M
 
 ## Deployment
 
-Vercel-ready. Push to GitHub and import, or use `vercel` CLI.
+Vercel utilise Bun avec `bun install --frozen-lockfile` et `bun x vite build`.
+La production publique est `https://spec.inforeole.fr`.
 
 ## Security Setup (Supabase)
 
-**IMPORTANT** : La migration de sécurité a été appliquée. En cas de nouveau déploiement :
+**IMPORTANT** : appliquer les migrations Supabase dans l'ordre avant le front.
 
-1. **Exécuter la migration SQL** dans Supabase SQL Editor :
-   ```
-   supabase/migrations/001_security_hardening.sql
-   ```
+1. `001_security_hardening.sql`
+2. `002_api_proxy_auth.sql`
+3. `003_admin_via_session.sql`
+4. `20260729150938_api_proxy_rate_limit.sql`
 
-2. **Le token admin est stocké** dans la table `specrefiner_config` (protégée par RLS).
-   Pour changer le token :
-   ```sql
-   -- Via une fonction SECURITY DEFINER ou directement en tant que postgres
-   UPDATE specrefiner_config SET value = 'nouveau-token' WHERE key = 'admin_token';
-   ```
-
-3. **Token actuel** dans `.env` : `VITE_ADMIN_TOKEN` doit correspondre à la valeur en BDD.
+Déployer ensuite les Edge Functions `openrouter` et `inworld` avec leurs secrets serveur.
+Ne jamais recréer `specrefiner_config.admin_token`, `VITE_ADMIN_TOKEN`, `VITE_APP_PASSWORD`, `VITE_OPENROUTER_API_KEY` ou `VITE_INWORLD_API_KEY`.
 
 **Politique de mot de passe** : 12+ caractères, majuscule, minuscule, chiffre, caractère spécial.
 
 ## Code Conventions
 
 - All UI text and AI prompts are in French
-- Vitest pour les tests (`npm run test`)
+- Vitest pour les tests (`bun run test`)
 - ESLint strict mode (zero warnings allowed)
 - ES modules only (`"type": "module"`)
 
@@ -148,7 +165,7 @@ Après toute modification d'interface (composants React, styles, interactions), 
 
 1. **Démarrer le serveur dev** (si pas déjà lancé) :
    ```bash
-   npm run dev  # Lance sur http://localhost:5173
+   bun run dev  # Lance sur http://localhost:5173
    ```
 
 2. **Tester avec les outils Chrome MCP** :
@@ -170,9 +187,8 @@ Après toute modification d'interface (composants React, styles, interactions), 
    - `read_console_messages` → vérifier les erreurs JS
    - Corriger et re-tester
 
-**Compte de test** : Utiliser `debug@test.com` avec le mot de passe `VITE_APP_PASSWORD` du `.env` pour les tests visuels.
-
-**Note** : Le mot de passe admin est dans `VITE_APP_PASSWORD` du `.env` (pour la page /admin).
+**Compte de test** : utiliser un compte dédié dont le mot de passe est géré hors du bundle client.
+La page `/admin` exige un compte `is_admin` authentifié et un token de session valide.
 
 ## Post-Mortem & Capitalisation
 

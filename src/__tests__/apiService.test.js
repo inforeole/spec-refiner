@@ -3,11 +3,20 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // Mock des modules AVANT l'import
 vi.mock('../config/constants', () => ({
     API_CONFIG: {
-        MODEL: 'test-model',
         MAX_TOKENS: 1000,
-        MAX_RETRIES: 2,
-        OPENROUTER_URL: 'https://api.test.com/chat'
+        MAX_RETRIES: 2
     }
+}));
+
+// Mock du client d'appel aux Edge Functions (URL + en-têtes authentifiés)
+vi.mock('../lib/apiClient', () => ({
+    functionUrl: (name) => `https://proxy.test/functions/v1/${name}`,
+    functionHeaders: () => ({
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer anon-test',
+        'apikey': 'anon-test',
+        'X-Session-Token': 'session-test'
+    }),
 }));
 
 vi.mock('../utils/responseValidation', () => ({
@@ -37,10 +46,7 @@ describe('apiService', () => {
     });
 
     describe('callOpenRouterAPI', () => {
-        // Note: Tester l'absence de clé API est difficile avec import.meta.env
-        // car il est évalué au moment de l'import. On teste les autres cas.
-
-        it('appelle fetch avec les bons paramètres', async () => {
+        it('appelle le proxy openrouter avec les bons paramètres', async () => {
             const mockResponse = {
                 ok: true,
                 json: () => Promise.resolve({
@@ -51,21 +57,23 @@ describe('apiService', () => {
 
             await callOpenRouterAPI({ messages: mockMessages });
 
+            // Appel vers l'Edge Function proxy, pas OpenRouter en direct
             expect(global.fetch).toHaveBeenCalledWith(
-                'https://api.test.com/chat',
+                'https://proxy.test/functions/v1/openrouter',
                 expect.objectContaining({
                     method: 'POST',
                     headers: expect.objectContaining({
-                        'Content-Type': 'application/json'
+                        'X-Session-Token': 'session-test'
                     }),
                     body: expect.any(String)
                 })
             );
 
             const callBody = JSON.parse(global.fetch.mock.calls[0][1].body);
-            expect(callBody.model).toBe('test-model');
-            expect(callBody.max_tokens).toBe(1000);
             expect(callBody.messages).toEqual(mockMessages);
+            expect(callBody.maxTokens).toBe(1000);
+            // Le modèle n'est plus choisi par le client (imposé côté serveur)
+            expect(callBody.model).toBeUndefined();
         });
 
         it('retourne le contenu de la réponse', async () => {
@@ -85,6 +93,7 @@ describe('apiService', () => {
         it('lance une erreur si la réponse n\'est pas ok', async () => {
             const mockResponse = {
                 ok: false,
+                status: 429,
                 json: () => Promise.resolve({
                     error: { message: 'Rate limit exceeded' }
                 })
@@ -98,12 +107,13 @@ describe('apiService', () => {
         it('lance une erreur générique si pas de message d\'erreur', async () => {
             const mockResponse = {
                 ok: false,
+                status: 500,
                 json: () => Promise.resolve({})
             };
             global.fetch.mockResolvedValue(mockResponse);
 
             await expect(callOpenRouterAPI({ messages: mockMessages }))
-                .rejects.toThrow('API request failed');
+                .rejects.toThrow('Erreur API');
         });
 
         it('passe le signal d\'abort à fetch', async () => {
