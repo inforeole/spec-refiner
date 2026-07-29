@@ -4,6 +4,7 @@ node_modules/
 # Build output
 dist/
 .worktrees/
+supabase/.temp/
 
 # Environment variables
 .env

@@ -1,5 +1,5 @@
 // Helpers partagés par les Edge Functions proxy: CORS + auth par token de session.
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.90.1";
 
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,10 +8,18 @@ export const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-export function jsonResponse(body: unknown, status = 200): Response {
+export function jsonResponse(
+  body: unknown,
+  status = 200,
+  extraHeaders: Record<string, string> = {},
+): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      ...extraHeaders,
+    },
   });
 }
 
@@ -26,20 +34,43 @@ function adminClient() {
   );
 }
 
-/**
- * Valide le token de session présenté dans l'en-tête X-Session-Token.
- * @returns l'user_id si valide, sinon null.
- */
-export async function verifySession(req: Request): Promise<string | null> {
-  const token = req.headers.get("x-session-token");
-  if (!token) return null;
+type ProxyEndpoint = "openrouter" | "inworld";
 
-  const { data, error } = await adminClient().rpc("verify_session_token", {
-    p_token: token,
-  });
+export type AuthorizationResult =
+  | { status: "ok"; userId: string }
+  | { status: "unauthorized" }
+  | { status: "rate_limited" }
+  | { status: "error" };
+
+/**
+ * Valide le token de session et consomme atomiquement le quota du proxy.
+ */
+export async function authorizeSession(
+  req: Request,
+  endpoint: ProxyEndpoint,
+  limit: number,
+  windowSeconds: number,
+): Promise<AuthorizationResult> {
+  const token = req.headers.get("x-session-token");
+  if (!token) return { status: "unauthorized" };
+
+  const { data, error } = await adminClient().rpc(
+    "consume_specrefiner_api_rate_limit",
+    {
+      p_token: token,
+      p_endpoint: endpoint,
+      p_limit: limit,
+      p_window_seconds: windowSeconds,
+    },
+  );
   if (error) {
-    console.error("verify_session_token error:", error.message);
-    return null;
+    console.error("consume_specrefiner_api_rate_limit error:", error.message);
+    return { status: "error" };
   }
-  return data ?? null; // data = user_id (uuid) ou null
+
+  const result = data?.[0];
+  if (!result?.user_id) return { status: "unauthorized" };
+  if (!result.allowed) return { status: "rate_limited" };
+
+  return { status: "ok", userId: result.user_id };
 }

@@ -38,27 +38,30 @@ Spec Refiner is a French-language AI-powered SaaS project specification tool. Us
 ## Build & Development Commands
 
 ```bash
-npm install          # Install dependencies
-npm run dev          # Start dev server (Vite, port 5173)
-npm run build        # Production build to dist/
-npm run lint         # ESLint (strict: --max-warnings 0)
-npm run preview      # Preview production build
+bun install          # Install dependencies
+bun run dev          # Start dev server (Vite, port 5173)
+bun run build        # Production build to dist/
+bun run lint         # ESLint (strict: --max-warnings 0)
+bun run preview      # Preview production build
 ```
 
 ## Environment Setup
 
-**Les secrets vivent dans Infisical** (self-hosted, `http://infisical.mesh:8080`), projet `spec-refiner` (workspaceId `398b111e-df73-4d9b-b41c-d92cb6fd7f7f`, env `dev`). **Aucun `.env` en clair** : `npm run dev/build/preview` lancent `infisical run ... -- vite` qui injecte les secrets `VITE_*` dans le process (Vite expose les `VITE_*` de `process.env`).
+**Les secrets vivent dans Infisical** (self-hosted, `http://infisical.mesh:8080`), projet `spec-refiner` (workspaceId `398b111e-df73-4d9b-b41c-d92cb6fd7f7f`, env `dev`).
+**Aucun `.env` en clair**.
+`bun run dev/build/preview` lance `infisical run ... -- vite` pour le développement local.
 
-> ⚠️ **Depuis la fuite du 2026-07-01** : plus AUCUN secret en var `VITE_*` (le préfixe inline la valeur dans le bundle public). Les clés API tierces (OpenRouter, Inworld) passent par des Edge Functions proxy (secrets serveur `OPENROUTER_API_KEY` / `INWORLD_API_KEY`) ; l'accès admin repose sur le token de session + `is_admin` (migration 003). Seuls `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (publics, protégés RLS) restent côté client. Les 4 autres (`VITE_OPENROUTER_API_KEY`, `VITE_INWORLD_API_KEY`, `VITE_ADMIN_TOKEN`, `VITE_APP_PASSWORD`) sont à SUPPRIMER d'Infisical + Vercel.
+> ⚠️ **Depuis la fuite du 2026-07-01** : aucun secret ne doit utiliser le préfixe `VITE_`, car Vite l'intègre au bundle public.
+> Les clés OpenRouter et Inworld vivent uniquement dans les secrets des Edge Functions.
+> L'accès admin repose sur le token de session et `is_admin`.
+> Seuls `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY`, publics par conception et protégés par RLS, restent côté client.
 
-Secrets gérés dans Infisical (env `dev`) :
+Configuration attendue :
 ```
-VITE_OPENROUTER_API_KEY   # OpenRouter API key (clé réactivée 2026-06-26)
-VITE_APP_PASSWORD         # Mot de passe de connexion (et /admin UI)
-VITE_ADMIN_TOKEN          # Token admin pour les RPCs sécurisées
-VITE_SUPABASE_URL         # URL projet Supabase
-VITE_SUPABASE_ANON_KEY    # Clé anon Supabase
-VITE_INWORLD_API_KEY      # TTS Inworld
+VITE_SUPABASE_URL       # Public, front Vite et Vercel
+VITE_SUPABASE_ANON_KEY  # Publique, front Vite et Vercel
+OPENROUTER_API_KEY      # Secret Edge Function uniquement
+INWORLD_API_KEY         # Secret Edge Function uniquement
 ```
 
 - Régénérer un `.env` local au besoin : `infisical export --domain http://infisical.mesh:8080 --env dev > .env` (ne pas commiter, `.env` est gitignored).
@@ -92,6 +95,8 @@ VITE_INWORLD_API_KEY      # TTS Inworld
 - Pas d'accès direct aux tables depuis le client
 - RPCs sécurisées : `login_user_secure`, `load_user_session`, `save_user_session`, `clear_user_session`
 - RPCs admin : `admin_create_user`, `admin_list_users`, `admin_delete_user` (exigent `p_session_token` d'un compte `is_admin` ; helpers `assert_session_admin` / `is_session_admin`)
+- Les proxies IA exigent un token de session, imposent le modèle et les plafonds, limitent la taille des requêtes et appliquent un rate limit atomique par utilisateur.
+- La vérification JWT plateforme des Edge Functions est désactivée, car l'authentification applicative est effectuée côté serveur par `consume_specrefiner_api_rate_limit`.
 
 **Key Files:**
 - `src/SpecRefiner.jsx` - Main component (handles all phases)
@@ -116,9 +121,11 @@ VITE_INWORLD_API_KEY      # TTS Inworld
 
 ## API Integration
 
-OpenRouter API with Claude Sonnet 4:
-- Endpoint: `https://openrouter.ai/api/v1/chat/completions`
-- Model: `anthropic/claude-sonnet-4` (défini dans `src/config/constants.js`, `API_CONFIG.MODEL`)
+OpenRouter API avec Claude Sonnet 4 :
+- Endpoint front : `${VITE_SUPABASE_URL}/functions/v1/openrouter`
+- Endpoint amont : `https://openrouter.ai/api/v1/chat/completions`, appelé uniquement par l'Edge Function
+- Modèle imposé côté serveur : `anthropic/claude-sonnet-4`
+- Limites serveur : 8 192 tokens de sortie, requête de 256 Ko, 20 appels par minute et par utilisateur
 - Interview conducted in French with one question at a time
 - Spec generation triggered by `[SPEC_COMPLETE]` marker in response
 
@@ -128,32 +135,27 @@ Supports: Images (base64), PDF (text extraction), DOCX (text extraction), TXT, M
 
 ## Deployment
 
-Vercel-ready. Push to GitHub and import, or use `vercel` CLI.
+Vercel utilise Bun avec `bun install --frozen-lockfile` et `bun x vite build`.
+La production publique est `https://spec.inforeole.fr`.
 
 ## Security Setup (Supabase)
 
-**IMPORTANT** : La migration de sécurité a été appliquée. En cas de nouveau déploiement :
+**IMPORTANT** : appliquer les migrations Supabase dans l'ordre avant le front.
 
-1. **Exécuter la migration SQL** dans Supabase SQL Editor :
-   ```
-   supabase/migrations/001_security_hardening.sql
-   ```
+1. `001_security_hardening.sql`
+2. `002_api_proxy_auth.sql`
+3. `003_admin_via_session.sql`
+4. `20260729150938_api_proxy_rate_limit.sql`
 
-2. **Le token admin est stocké** dans la table `specrefiner_config` (protégée par RLS).
-   Pour changer le token :
-   ```sql
-   -- Via une fonction SECURITY DEFINER ou directement en tant que postgres
-   UPDATE specrefiner_config SET value = 'nouveau-token' WHERE key = 'admin_token';
-   ```
-
-3. **Token actuel** dans `.env` : `VITE_ADMIN_TOKEN` doit correspondre à la valeur en BDD.
+Déployer ensuite les Edge Functions `openrouter` et `inworld` avec leurs secrets serveur.
+Ne jamais recréer `specrefiner_config.admin_token`, `VITE_ADMIN_TOKEN`, `VITE_APP_PASSWORD`, `VITE_OPENROUTER_API_KEY` ou `VITE_INWORLD_API_KEY`.
 
 **Politique de mot de passe** : 12+ caractères, majuscule, minuscule, chiffre, caractère spécial.
 
 ## Code Conventions
 
 - All UI text and AI prompts are in French
-- Vitest pour les tests (`npm run test`)
+- Vitest pour les tests (`bun run test`)
 - ESLint strict mode (zero warnings allowed)
 - ES modules only (`"type": "module"`)
 
@@ -163,7 +165,7 @@ Après toute modification d'interface (composants React, styles, interactions), 
 
 1. **Démarrer le serveur dev** (si pas déjà lancé) :
    ```bash
-   npm run dev  # Lance sur http://localhost:5173
+   bun run dev  # Lance sur http://localhost:5173
    ```
 
 2. **Tester avec les outils Chrome MCP** :
@@ -185,9 +187,8 @@ Après toute modification d'interface (composants React, styles, interactions), 
    - `read_console_messages` → vérifier les erreurs JS
    - Corriger et re-tester
 
-**Compte de test** : Utiliser `debug@test.com` avec le mot de passe `VITE_APP_PASSWORD` du `.env` pour les tests visuels.
-
-**Note** : Le mot de passe admin est dans `VITE_APP_PASSWORD` du `.env` (pour la page /admin).
+**Compte de test** : utiliser un compte dédié dont le mot de passe est géré hors du bundle client.
+La page `/admin` exige un compte `is_admin` authentifié et un token de session valide.
 
 ## Post-Mortem & Capitalisation
 
