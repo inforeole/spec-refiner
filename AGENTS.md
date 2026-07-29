@@ -163,10 +163,11 @@ GitHub Actions exécute installation figée, lint, tests et build sur chaque pul
 4. `20260729150938_api_proxy_rate_limit.sql`
 5. `20260729194159_secure_session_rpcs.sql`
 6. `20260729201527_fix_api_rate_limit_conflict.sql`
+7. `20260729202858_revoke_legacy_session_rpcs.sql`
 
 La migration 5 ajoute les RPCs de session v2 et révoque l'appel public direct à `create_user`.
 La migration 6 corrige l'ambiguïté SQL du rate limiter et durcit son `search_path`.
-Une migration ultérieure devra révoquer les anciennes RPCs de session après validation du client déployé.
+La migration 7 révoque les anciennes RPCs après validation transactionnelle avec deux utilisateurs et deux tokens temporaires.
 
 Déployer ensuite les Edge Functions `openrouter` et `inworld` avec leurs secrets serveur.
 Ne jamais recréer `specrefiner_config.admin_token`, `VITE_ADMIN_TOKEN`, `VITE_APP_PASSWORD`, `VITE_OPENROUTER_API_KEY` ou `VITE_INWORLD_API_KEY`.

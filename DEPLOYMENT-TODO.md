@@ -52,23 +52,26 @@ Les anciennes clés OpenRouter et Inworld ont été révoquées.
 - Un appel du proxy sans `X-Session-Token` valide renvoie HTTP 401.
 - Les logs OpenRouter montrent uniquement `anthropic/claude-sonnet-4`.
 
-## Dette de sécurité séparée
+## Dette de sécurité fermée
 
-L’audit Supabase signale que les anciennes RPC `load_user_session`, `save_user_session` et `clear_user_session` autorisent encore l’accès par simple identifiant utilisateur.
+L’audit Supabase signalait que les anciennes RPC `load_user_session`, `save_user_session` et `clear_user_session` autorisaient l’accès par simple identifiant utilisateur.
 La migration `20260729194159_secure_session_rpcs.sql` et le client v2 sont déployés depuis le 29 juillet 2026.
 La migration `20260729201527_fix_api_rate_limit_conflict.sql` corrige également l'ambiguïté SQL découverte par le lint distant dans le rate limiter.
 Le domaine `https://spec.inforeole.fr` sert le bundle v2.
 Les RPC v2 refusent les tokens invalides et l'appel direct à `create_user` est interdit au rôle anonyme.
-La sécurité des sessions ne doit pas être considérée comme complète avant la révocation effective des trois anciennes signatures.
+Le test croisé transactionnel crée deux utilisateurs et deux tokens temporaires, valide l'isolation des chargements, sauvegardes et réinitialisations, puis annule toutes les données de test.
+La migration `20260729202858_revoke_legacy_session_rpcs.sql` révoque les trois anciennes signatures pour `PUBLIC`, `anon`, `authenticated` et `service_role`.
+Les ACL effectives ne conservent que le propriétaire `postgres`.
+L'API publique répond HTTP 401 sur l'ancienne RPC et aucun compte temporaire ne subsiste.
 
 Ordre obligatoire:
 
 1. [x] Appliquer `20260729194159_secure_session_rpcs.sql`.
 2. [x] Appliquer `20260729201527_fix_api_rate_limit_conflict.sql`.
 3. [x] Déployer le client qui appelle les RPC v2.
-4. [ ] Vérifier en production le chargement, la sauvegarde et la réinitialisation avec deux comptes distincts.
-5. [ ] Générer avec la CLI Supabase une migration séparée qui révoque `load_user_session(uuid)`, `save_user_session(uuid, jsonb, text, integer, text, boolean, integer)` et `clear_user_session(uuid)` pour `PUBLIC`, `anon` et `authenticated`.
-6. [ ] Appliquer cette migration de révocation.
-7. [ ] Contrôler les ACL effectives en base avant de fermer cette dette.
+4. [x] Vérifier en production le chargement, la sauvegarde et la réinitialisation avec deux comptes distincts.
+5. [x] Générer avec la CLI Supabase une migration séparée qui révoque `load_user_session(uuid)`, `save_user_session(uuid, jsonb, text, integer, text, boolean, integer)` et `clear_user_session(uuid)`.
+6. [x] Appliquer cette migration de révocation.
+7. [x] Contrôler les ACL effectives en base avant de fermer cette dette.
 
 Les alertes sur les tables `pm_*` appartiennent à ProspectMiner et ne doivent pas être corrigées depuis ce dépôt.
