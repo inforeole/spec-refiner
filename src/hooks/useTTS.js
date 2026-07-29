@@ -21,43 +21,39 @@ export function useTTS(userId) {
 
     const audioRef = useRef(new Audio());
     const abortControllerRef = useRef(null);
+    const preloadControllersRef = useRef(new Set());
     const audioCacheRef = useRef(new Map());
 
-    // Cleanup on unmount
-    useEffect(() => {
-        const audio = audioRef.current;
-        const audioCache = audioCacheRef.current;
-        return () => {
-            audio.pause();
-            audio.src = '';
-            if (abortControllerRef.current) {
-                abortControllerRef.current.abort();
-            }
-            // Revoke all cached blob URLs to free memory
-            audioCache.forEach(url => URL.revokeObjectURL(url));
-            audioCache.clear();
-        };
-    }, []);
-
-    // Cleanup when userId changes (prevents audio mixing between users)
-    useEffect(() => {
-        // Stop any playing audio
+    const clearAudioResources = useCallback(() => {
         audioRef.current.pause();
         audioRef.current.src = '';
-        setIsPlaying(false);
-        setPlayingMessageId(null);
-        setIsLoading(false);
 
-        // Abort pending requests
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
             abortControllerRef.current = null;
         }
 
-        // Clear audio cache (message indexes are not unique across users)
+        preloadControllersRef.current.forEach(controller => controller.abort());
+        preloadControllersRef.current.clear();
+
         audioCacheRef.current.forEach(url => URL.revokeObjectURL(url));
         audioCacheRef.current.clear();
-    }, [userId]);
+    }, []);
+
+    const reset = useCallback(() => {
+        clearAudioResources();
+        setIsPlaying(false);
+        setPlayingMessageId(null);
+        setIsLoading(false);
+    }, [clearAudioResources]);
+
+    // Cleanup on unmount
+    useEffect(() => clearAudioResources, [clearAudioResources]);
+
+    // Cleanup when userId changes (prevents audio mixing between users)
+    useEffect(() => {
+        reset();
+    }, [reset, userId]);
 
     // Setup audio event listeners
     useEffect(() => {
@@ -84,21 +80,31 @@ export function useTTS(userId) {
     }, []);
 
     // Preload audio in background and cache it
-    const preloadAudio = useCallback(async (text, messageId) => {
-        if (audioCacheRef.current.has(messageId)) return;
+    const preloadAudio = useCallback(async (text) => {
+        const cacheKey = JSON.stringify([userId, text]);
+        if (audioCacheRef.current.has(cacheKey)) return;
 
-        const { audio, error } = await synthesizeSpeech(text);
-        if (error) {
-            console.error('TTS preload error:', error);
-            // Don't disable TTS on preload errors - manual play may still work
-            return;
-        }
+        const controller = new AbortController();
+        preloadControllersRef.current.add(controller);
 
-        if (audio) {
-            const url = URL.createObjectURL(audio);
-            audioCacheRef.current.set(messageId, url);
+        try {
+            const { audio, error } = await synthesizeSpeech(text, controller.signal);
+            if (controller.signal.aborted) return;
+
+            if (error) {
+                console.error('TTS preload error:', error);
+                // Don't disable TTS on preload errors - manual play may still work
+                return;
+            }
+
+            if (audio) {
+                const url = URL.createObjectURL(audio);
+                audioCacheRef.current.set(cacheKey, url);
+            }
+        } finally {
+            preloadControllersRef.current.delete(controller);
         }
-    }, []);
+    }, [userId]);
 
     const play = useCallback(async (text, messageId) => {
         // If already playing this message, stop it
@@ -123,9 +129,10 @@ export function useTTS(userId) {
         }
 
         setPlayingMessageId(messageId);
+        const cacheKey = JSON.stringify([userId, text]);
 
         // Check cache first - if available, play instantly
-        const cachedUrl = audioCacheRef.current.get(messageId);
+        const cachedUrl = audioCacheRef.current.get(cacheKey);
         if (cachedUrl) {
             audioRef.current.src = cachedUrl;
             try {
@@ -143,10 +150,13 @@ export function useTTS(userId) {
 
         // Not in cache - generate, cache, then play
         setIsLoading(true);
-        abortControllerRef.current = new AbortController();
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
 
-        const { audio, error } = await synthesizeSpeech(text, abortControllerRef.current.signal);
+        const { audio, error } = await synthesizeSpeech(text, controller.signal);
+        if (controller.signal.aborted) return;
 
+        abortControllerRef.current = null;
         setIsLoading(false);
 
         if (error) {
@@ -158,7 +168,7 @@ export function useTTS(userId) {
 
         if (audio) {
             const url = URL.createObjectURL(audio);
-            audioCacheRef.current.set(messageId, url);
+            audioCacheRef.current.set(cacheKey, url);
             audioRef.current.src = url;
 
             try {
@@ -175,7 +185,7 @@ export function useTTS(userId) {
         } else {
             setPlayingMessageId(null);
         }
-    }, [playingMessageId, isPlaying]);
+    }, [isPlaying, playingMessageId, userId]);
 
     const stop = useCallback(() => {
         audioRef.current.pause();
@@ -204,6 +214,7 @@ export function useTTS(userId) {
         ttsAvailable,
         play,
         stop,
+        reset,
         toggleAutoPlay,
         preloadAudio
     };

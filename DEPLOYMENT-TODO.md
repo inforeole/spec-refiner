@@ -53,5 +53,16 @@ Les anciennes clés OpenRouter et Inworld ont été révoquées.
 ## Dette de sécurité séparée
 
 L’audit Supabase signale que les anciennes RPC `load_user_session`, `save_user_session` et `clear_user_session` autorisent encore l’accès par simple identifiant utilisateur.
-Elles doivent être migrées vers le token de session avant de considérer l’autorisation applicative comme complète.
+La migration `20260729194159_secure_session_rpcs.sql` et le client v2 corrigent ce contrat, mais ne sont pas déployés au moment de cette mise à jour.
+La sécurité des sessions ne doit pas être considérée comme complète avant la révocation effective des trois anciennes signatures.
+
+Ordre obligatoire:
+
+1. Appliquer `20260729194159_secure_session_rpcs.sql`.
+2. Déployer le client qui appelle les RPC v2.
+3. Vérifier en production le chargement, la sauvegarde et la réinitialisation avec deux comptes distincts.
+4. Générer avec la CLI Supabase une migration séparée qui révoque `load_user_session(uuid)`, `save_user_session(uuid, jsonb, text, integer, text, boolean, integer)` et `clear_user_session(uuid)` pour `PUBLIC`, `anon` et `authenticated`.
+5. Appliquer cette migration de révocation.
+6. Contrôler les ACL effectives en base avant de fermer cette dette.
+
 Les alertes sur les tables `pm_*` appartiennent à ProspectMiner et ne doivent pas être corrigées depuis ce dépôt.

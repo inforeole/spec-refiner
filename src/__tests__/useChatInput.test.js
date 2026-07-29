@@ -6,7 +6,24 @@ import { useChatInput } from '../hooks/useChatInput';
 vi.mock('../utils/fileProcessing', () => ({
     processFiles: vi.fn().mockResolvedValue([
         { type: 'text', name: 'test.txt', content: 'contenu' }
-    ])
+    ]),
+    processTextFile: vi.fn().mockResolvedValue({
+        type: 'text',
+        name: 'test.txt',
+        content: 'contenu'
+    }),
+    processPdfFile: vi.fn().mockResolvedValue({
+        type: 'text',
+        name: 'test.pdf',
+        content: 'contenu PDF'
+    }),
+    processDocxFile: vi.fn().mockResolvedValue({
+        type: 'text',
+        name: 'test.docx',
+        content: 'contenu DOCX'
+    }),
+    resizeImage: vi.fn(),
+    truncateText: vi.fn(content => content)
 }));
 
 describe('useChatInput', () => {
@@ -44,40 +61,40 @@ describe('useChatInput', () => {
     });
 
     describe('handleFileSelect', () => {
-        it('ajoute des fichiers depuis input.files', () => {
+        it('ajoute des fichiers depuis input.files', async () => {
             const { result } = renderHook(() => useChatInput());
             const file = new File(['content'], 'test.txt', { type: 'text/plain' });
 
-            act(() => {
-                result.current.handleFileSelect({ target: { files: [file] } });
+            await act(async () => {
+                await result.current.handleFileSelect({ target: { files: [file] } });
             });
 
             expect(result.current.chatFiles).toHaveLength(1);
             expect(result.current.chatFiles[0].name).toBe('test.txt');
         });
 
-        it('ajoute des fichiers depuis dataTransfer', () => {
+        it('ajoute des fichiers depuis dataTransfer', async () => {
             const { result } = renderHook(() => useChatInput());
             const file = new File(['content'], 'dropped.pdf', { type: 'application/pdf' });
 
-            act(() => {
-                result.current.handleFileSelect({ dataTransfer: { files: [file] } });
+            await act(async () => {
+                await result.current.handleFileSelect({ dataTransfer: { files: [file] } });
             });
 
             expect(result.current.chatFiles).toHaveLength(1);
             expect(result.current.chatFiles[0].name).toBe('dropped.pdf');
         });
 
-        it('remplace le fichier existant (limité à 1 fichier)', () => {
+        it('remplace le fichier existant (limité à 1 fichier)', async () => {
             const { result } = renderHook(() => useChatInput());
             const file1 = new File(['content1'], 'file1.txt', { type: 'text/plain' });
             const file2 = new File(['content2'], 'file2.txt', { type: 'text/plain' });
 
-            act(() => {
-                result.current.handleFileSelect({ target: { files: [file1] } });
+            await act(async () => {
+                await result.current.handleFileSelect({ target: { files: [file1] } });
             });
-            act(() => {
-                result.current.handleFileSelect({ target: { files: [file2] } });
+            await act(async () => {
+                await result.current.handleFileSelect({ target: { files: [file2] } });
             });
 
             expect(result.current.chatFiles).toHaveLength(1);
@@ -86,12 +103,12 @@ describe('useChatInput', () => {
     });
 
     describe('removeFile', () => {
-        it('supprime le fichier unique', () => {
+        it('supprime le fichier unique', async () => {
             const { result } = renderHook(() => useChatInput());
             const file = new File(['content'], 'file.txt', { type: 'text/plain' });
 
-            act(() => {
-                result.current.handleFileSelect({ target: { files: [file] } });
+            await act(async () => {
+                await result.current.handleFileSelect({ target: { files: [file] } });
             });
             expect(result.current.chatFiles).toHaveLength(1);
 
@@ -104,13 +121,13 @@ describe('useChatInput', () => {
     });
 
     describe('clearInput', () => {
-        it('réinitialise message et fichiers', () => {
+        it('réinitialise message et fichiers', async () => {
             const { result } = renderHook(() => useChatInput());
             const file = new File(['content'], 'test.txt', { type: 'text/plain' });
 
-            act(() => {
+            await act(async () => {
                 result.current.setInputMessage('test message');
-                result.current.handleFileSelect({ target: { files: [file] } });
+                await result.current.handleFileSelect({ target: { files: [file] } });
             });
 
             expect(result.current.inputMessage).toBe('test message');
@@ -126,15 +143,15 @@ describe('useChatInput', () => {
     });
 
     describe('addFiles', () => {
-        it('ajoute le premier fichier seulement (limité à 1)', () => {
+        it('ajoute le premier fichier seulement (limité à 1)', async () => {
             const { result } = renderHook(() => useChatInput());
             const files = [
                 new File(['content1'], 'file1.txt', { type: 'text/plain' }),
                 new File(['content2'], 'file2.txt', { type: 'text/plain' })
             ];
 
-            act(() => {
-                result.current.addFiles(files);
+            await act(async () => {
+                await result.current.addFiles(files);
             });
 
             expect(result.current.chatFiles).toHaveLength(1);
@@ -147,9 +164,7 @@ describe('useChatInput', () => {
             const { result } = renderHook(() => useChatInput());
             const files = [new File(['content'], 'test.txt', { type: 'text/plain' })];
 
-            let processingStatesDuringCall = [];
             const promise = act(async () => {
-                processingStatesDuringCall.push(result.current.isProcessingFiles);
                 const processed = await result.current.processCurrentFiles(files);
                 return processed;
             });

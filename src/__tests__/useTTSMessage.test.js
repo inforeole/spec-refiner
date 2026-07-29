@@ -5,6 +5,7 @@ import { useTTSMessage } from '../hooks/useTTSMessage';
 // Mock useTTS
 const mockPlayAudio = vi.fn();
 const mockPreloadAudio = vi.fn();
+const mockResetAudio = vi.fn();
 const mockToggleAutoPlay = vi.fn();
 
 vi.mock('../hooks/useTTS', () => ({
@@ -15,7 +16,8 @@ vi.mock('../hooks/useTTS', () => ({
         autoPlayEnabled: false,
         play: mockPlayAudio,
         toggleAutoPlay: mockToggleAutoPlay,
-        preloadAudio: mockPreloadAudio
+        preloadAudio: mockPreloadAudio,
+        reset: mockResetAudio
     }))
 }));
 
@@ -36,34 +38,42 @@ describe('useTTSMessage', () => {
             autoPlayEnabled: false,
             play: mockPlayAudio,
             toggleAutoPlay: mockToggleAutoPlay,
-            preloadAudio: mockPreloadAudio
+            preloadAudio: mockPreloadAudio,
+            reset: mockResetAudio
         });
     });
 
     describe('preload audio', () => {
         it('preloads audio on new assistant message', () => {
-            const initialMessages = [];
+            const initialMessages = [
+                { role: 'assistant', content: 'Bienvenue' },
+                { role: 'user', content: 'Mon projet' }
+            ];
             const { rerender } = renderHook(
                 ({ messages }) => useTTSMessage(messages),
                 { initialProps: { messages: initialMessages } }
             );
 
             const newMessages = [
+                ...initialMessages,
                 { role: 'assistant', content: 'Bonjour!' }
             ];
             rerender({ messages: newMessages });
 
-            expect(mockPreloadAudio).toHaveBeenCalledWith('Bonjour!', 0);
+            expect(mockPreloadAudio).toHaveBeenCalledWith('Bonjour!', 2);
         });
 
         it('does not preload for user messages', () => {
-            const initialMessages = [];
+            const initialMessages = [
+                { role: 'assistant', content: 'Bienvenue' }
+            ];
             const { rerender } = renderHook(
                 ({ messages }) => useTTSMessage(messages),
                 { initialProps: { messages: initialMessages } }
             );
 
             const newMessages = [
+                ...initialMessages,
                 { role: 'user', content: 'Mon projet' }
             ];
             rerender({ messages: newMessages });
@@ -81,21 +91,27 @@ describe('useTTSMessage', () => {
                 autoPlayEnabled: true,
                 play: mockPlayAudio,
                 toggleAutoPlay: mockToggleAutoPlay,
-                preloadAudio: mockPreloadAudio
+                preloadAudio: mockPreloadAudio,
+                reset: mockResetAudio
             });
 
-            const initialMessages = [];
+            const initialMessages = [
+                { role: 'assistant', content: 'Bienvenue' },
+                { role: 'user', content: 'Mon projet' }
+            ];
             const { rerender } = renderHook(
                 ({ messages }) => useTTSMessage(messages),
                 { initialProps: { messages: initialMessages } }
             );
 
             const newMessages = [
+                ...initialMessages,
                 { role: 'assistant', content: 'Bonjour!' }
             ];
             rerender({ messages: newMessages });
 
-            expect(mockPlayAudio).toHaveBeenCalledWith('Bonjour!', 0);
+            expect(mockPlayAudio).toHaveBeenCalledWith('Bonjour!', 2);
+            expect(mockPreloadAudio).not.toHaveBeenCalled();
         });
 
         it('does not auto-play when disabled', () => {
@@ -106,16 +122,21 @@ describe('useTTSMessage', () => {
                 autoPlayEnabled: false,
                 play: mockPlayAudio,
                 toggleAutoPlay: mockToggleAutoPlay,
-                preloadAudio: mockPreloadAudio
+                preloadAudio: mockPreloadAudio,
+                reset: mockResetAudio
             });
 
-            const initialMessages = [];
+            const initialMessages = [
+                { role: 'assistant', content: 'Bienvenue' },
+                { role: 'user', content: 'Mon projet' }
+            ];
             const { rerender } = renderHook(
                 ({ messages }) => useTTSMessage(messages),
                 { initialProps: { messages: initialMessages } }
             );
 
             const newMessages = [
+                ...initialMessages,
                 { role: 'assistant', content: 'Bonjour!' }
             ];
             rerender({ messages: newMessages });
@@ -125,6 +146,21 @@ describe('useTTSMessage', () => {
     });
 
     describe('session reset', () => {
+        it('clears TTS state when messages are cleared', () => {
+            const initialMessages = [
+                { role: 'assistant', content: 'Message 1' },
+                { role: 'user', content: 'Message 2' }
+            ];
+            const { rerender } = renderHook(
+                ({ messages }) => useTTSMessage(messages, 'user-1'),
+                { initialProps: { messages: initialMessages } }
+            );
+
+            rerender({ messages: [] });
+
+            expect(mockResetAudio).toHaveBeenCalledOnce();
+        });
+
         it('resets tracking on session clear', () => {
             const initialMessages = [
                 { role: 'assistant', content: 'Message 1' },
@@ -140,13 +176,71 @@ describe('useTTSMessage', () => {
 
             // Add new message after reset
             vi.clearAllMocks();
-            const newMessages = [
-                { role: 'assistant', content: 'Nouveau message' }
+            const welcomeMessages = [
+                { role: 'assistant', content: 'Bienvenue' }
             ];
-            rerender({ messages: newMessages });
+            rerender({ messages: welcomeMessages });
+
+            const userMessages = [
+                ...welcomeMessages,
+                { role: 'user', content: 'Nouveau projet' }
+            ];
+            rerender({ messages: userMessages });
+
+            rerender({
+                messages: [
+                    ...userMessages,
+                    { role: 'assistant', content: 'Nouveau message' }
+                ]
+            });
 
             // Should preload for the new message after reset
-            expect(mockPreloadAudio).toHaveBeenCalledWith('Nouveau message', 0);
+            expect(mockPreloadAudio).toHaveBeenCalledWith('Nouveau message', 2);
+        });
+    });
+
+    describe('changement d’utilisateur', () => {
+        it('ne lit pas l’historique restauré du nouvel utilisateur', () => {
+            const firstMessages = [
+                { role: 'assistant', content: 'Bienvenue A' },
+                { role: 'user', content: 'Projet A' }
+            ];
+            const { rerender } = renderHook(
+                ({ messages, userId, isSessionLoading }) => (
+                    useTTSMessage(messages, userId, isSessionLoading)
+                ),
+                {
+                    initialProps: {
+                        messages: firstMessages,
+                        userId: 'user-a',
+                        isSessionLoading: false
+                    }
+                }
+            );
+
+            vi.clearAllMocks();
+            rerender({
+                userId: 'user-b',
+                messages: firstMessages,
+                isSessionLoading: false
+            });
+            rerender({
+                userId: 'user-b',
+                messages: firstMessages,
+                isSessionLoading: true
+            });
+            rerender({
+                userId: 'user-b',
+                isSessionLoading: false,
+                messages: [
+                    { role: 'assistant', content: 'Bienvenue B' },
+                    { role: 'user', content: 'Projet B' },
+                    { role: 'assistant', content: 'Historique B' }
+                ]
+            });
+
+            expect(mockPreloadAudio).not.toHaveBeenCalled();
+            expect(mockPlayAudio).not.toHaveBeenCalled();
         });
     });
 

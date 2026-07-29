@@ -4,6 +4,7 @@ import { uploadImage } from '../services/imageService';
 import { generateFileSummary } from '../services/summaryService';
 import { MARKERS } from '../config/constants';
 import { getSystemPrompt } from '../prompts/systemPrompt';
+import { extractFinalSpec } from '../utils/responseValidation';
 
 /**
  * Hook pour gérer la logique de conversation avec l'API
@@ -85,7 +86,11 @@ export function useInterviewChat(sessionHook) {
      * Gère la complétion du spec
      */
     const handleSpecComplete = useCallback((response) => {
-        const rawSpec = response.replace(MARKERS.SPEC_COMPLETE, '').trim();
+        const rawSpec = extractFinalSpec(response);
+        if (!rawSpec) {
+            return false;
+        }
+
         const specContent = cleanSpecContent(rawSpec);
 
         // Ajouter un message à l'historique pour que l'IA sache que les specs ont été générées
@@ -103,6 +108,7 @@ export function useInterviewChat(sessionHook) {
         updateFinalSpec(specContent);
         updatePhase('complete');
         exitModificationMode();
+        return true;
     }, [updateMessages, updateFinalSpec, updatePhase, exitModificationMode, updateMessageCountAtLastSpec]);
 
     /**
@@ -200,7 +206,14 @@ export function useInterviewChat(sessionHook) {
 
             if (hasSpecMarker && !isModificationMode) {
                 // Première génération de specs
-                handleSpecComplete(response);
+                if (!handleSpecComplete(response)) {
+                    updateMessages(prev => [...prev, {
+                        role: 'assistant',
+                        content: '⚠️ Le document généré était vide ou incomplet. Relance la génération des spécifications.'
+                    }]);
+                    setIsLoading(false);
+                    return false;
+                }
             } else {
                 // Conversation normale OU mode modification (ignorer [SPEC_COMPLETE])
                 let cleanResponse = response;
@@ -268,12 +281,11 @@ RÈGLES OBLIGATOIRES:
         try {
             const { response, isValid } = await callAPI(conversationHistory);
 
-            if (!isValid) {
+            if (!isValid || !handleSpecComplete(response)) {
                 alert('La génération des spécifications a échoué (réponse incohérente). Veuillez réessayer.');
                 return false;
             }
 
-            handleSpecComplete(response);
             return true;
         } catch (error) {
             if (error.name === 'AbortError') {
