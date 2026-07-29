@@ -133,8 +133,9 @@ Inworld TTS :
 - Endpoint front : `${VITE_SUPABASE_URL}/functions/v1/inworld`
 - Endpoint amont : `https://api.inworld.ai/tts/v1/voice`, appelé uniquement par l'Edge Function
 - Modèle imposé côté serveur : `inworld-tts-1.5-mini`
-- Voix imposée côté serveur : `default-o-lizv8yves-5uhgzcrjog__ok`
-- Débit : `0.8`
+- Voix imposée côté serveur : `default-o-lizv8yves-5uhgzcrjog__vanessa`
+- Débit : `1.05`
+- Température : `1.5`
 - Le contrat de requête est centralisé dans `supabase/functions/inworld/config.ts`.
 
 ## File Processing
