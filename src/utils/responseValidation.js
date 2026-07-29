@@ -1,12 +1,35 @@
+const SPEC_COMPLETE_MARKER = '[SPEC_COMPLETE]';
+
+export const extractFinalSpec = (text) => {
+    if (!text || typeof text !== 'string') {
+        return null;
+    }
+
+    const markerIndex = text.indexOf(SPEC_COMPLETE_MARKER);
+    if (markerIndex === -1) {
+        return null;
+    }
+
+    const content = text
+        .slice(markerIndex + SPEC_COMPLETE_MARKER.length)
+        .trim();
+    const titleMatch = content.match(/^#\s+\S.*$/m);
+
+    if (!titleMatch) {
+        return null;
+    }
+
+    return content.slice(titleMatch.index).trim();
+};
+
 // Validation des réponses API - détecte les réponses incohérentes/corrompues
 export const isValidResponse = (text) => {
     if (!text || typeof text !== 'string' || text.trim().length < 10) {
         return false;
     }
 
-    // Les specs complètes sont toujours valides (contenu markdown structuré)
-    if (text.includes('[SPEC_COMPLETE]')) {
-        return true;
+    if (text.includes(SPEC_COMPLETE_MARKER)) {
+        return extractFinalSpec(text) !== null;
     }
 
     // Mots français courants qui devraient apparaître dans une réponse normale

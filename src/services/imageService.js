@@ -42,7 +42,11 @@ export async function uploadImage(base64Data, filename = null) {
 
         // Generate unique filename
         const extension = mimeType.split('/')[1] || 'png';
-        const uniqueFilename = filename || `${Date.now()}-${Math.random().toString(36).substring(7)}.${extension}`;
+        const requestedFilename = filename || `image.${extension}`;
+        const safeFilename = requestedFilename
+            .replace(/[^a-zA-Z0-9._-]/g, '_')
+            .replace(/^\.+/, '') || `image.${extension}`;
+        const uniqueFilename = `${crypto.randomUUID()}-${safeFilename}`;
 
         // Upload to Supabase Storage
         const { data, error } = await supabase.storage

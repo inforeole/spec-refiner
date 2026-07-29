@@ -6,18 +6,64 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { TIMEOUTS } from '../config/constants';
 
-// Debounce helper for auto-save (per user)
+// Debounce helper for auto-save (per authenticated session)
 const saveTimeouts = new Map();
+const saveQueues = new Map();
+
+async function rpcWithTimeout(functionName, parameters) {
+    const controller = new AbortController();
+    let timeoutId;
+
+    const timeout = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+            controller.abort();
+            reject(new Error('Délai Supabase dépassé'));
+        }, TIMEOUTS.SUPABASE_RPC);
+    });
+
+    const query = supabase.rpc(functionName, parameters);
+    const request = typeof query.abortSignal === 'function'
+        ? query.abortSignal(controller.signal)
+        : query;
+
+    try {
+        return await Promise.race([request, timeout]);
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
+function enqueueSave(sessionToken, saveOperation) {
+    const previousSave = saveQueues.get(sessionToken) || Promise.resolve();
+    const currentSave = previousSave
+        .catch(() => undefined)
+        .then(saveOperation);
+
+    saveQueues.set(sessionToken, currentSave);
+    currentSave.finally(() => {
+        if (saveQueues.get(sessionToken) === currentSave) {
+            saveQueues.delete(sessionToken);
+        }
+    });
+
+    return currentSave;
+}
 
 /**
- * Cancel any pending debounced saves for a user
+ * Cancel any pending debounced saves for a session
  * Call this when user changes to prevent race conditions
- * @param {string} userId - The user's UUID
+ * @param {string} sessionToken - The authenticated session token
  */
-export function cancelPendingSaves(userId) {
-    if (saveTimeouts.has(userId)) {
-        clearTimeout(saveTimeouts.get(userId));
-        saveTimeouts.delete(userId);
+export function cancelPendingSaves(sessionToken) {
+    if (saveTimeouts.has(sessionToken)) {
+        const pendingSave = saveTimeouts.get(sessionToken);
+        clearTimeout(pendingSave.timeoutId);
+        pendingSave.resolve({
+            success: false,
+            error: null,
+            cancelled: true
+        });
+        saveTimeouts.delete(sessionToken);
     }
 }
 
@@ -56,21 +102,21 @@ function filterMessagesForStorage(messages) {
 /**
  * Load session from Supabase for a specific user
  * Uses secure RPC function
- * @param {string} userId - The user's UUID
+ * @param {string} sessionToken - The authenticated session token
  * @returns {Promise<{data: Object|null, error: string|null}>}
  */
-export async function loadSession(userId) {
+export async function loadSession(sessionToken) {
     if (!isSupabaseConfigured()) {
         return { data: null, error: 'Supabase non configuré. Vérifiez les variables d\'environnement.' };
     }
 
-    if (!userId) {
-        return { data: null, error: 'User ID requis' };
+    if (!sessionToken) {
+        return { data: null, error: 'Token de session requis' };
     }
 
     try {
-        const { data, error } = await supabase.rpc('load_user_session', {
-            p_user_id: userId
+        const { data, error } = await rpcWithTimeout('load_user_session_v2', {
+            p_session_token: sessionToken
         });
 
         if (error) throw error;
@@ -101,24 +147,24 @@ export async function loadSession(userId) {
 /**
  * Save session to Supabase for a specific user
  * Uses secure RPC function
- * @param {string} userId - The user's UUID
+ * @param {string} sessionToken - The authenticated session token
  * @param {Object} data - Session data to save
  * @param {boolean} immediate - If true, save immediately without debounce
  * @returns {Promise<{success: boolean, error: string|null}>}
  */
-export async function saveSession(userId, data, immediate = false) {
+export async function saveSession(sessionToken, data, immediate = false) {
     if (!isSupabaseConfigured()) {
         return { success: false, error: 'Supabase non configuré' };
     }
 
-    if (!userId) {
-        return { success: false, error: 'User ID requis' };
+    if (!sessionToken) {
+        return { success: false, error: 'Token de session requis' };
     }
 
     const doSave = async () => {
         try {
-            const { error } = await supabase.rpc('save_user_session', {
-                p_user_id: userId,
+            const { error } = await rpcWithTimeout('save_user_session_v2', {
+                p_session_token: sessionToken,
                 p_messages: filterMessagesForStorage(data.messages || []),
                 p_phase: data.phase,
                 p_question_count: data.questionCount,
@@ -136,39 +182,51 @@ export async function saveSession(userId, data, immediate = false) {
     };
 
     if (immediate) {
-        return doSave();
+        cancelPendingSaves(sessionToken);
+        return enqueueSave(sessionToken, doSave);
     }
 
-    // Debounced save per user - returns immediately, saves in background
-    if (saveTimeouts.has(userId)) {
-        clearTimeout(saveTimeouts.get(userId));
-    }
-    saveTimeouts.set(userId, setTimeout(() => {
-        doSave().catch(console.error);
-        saveTimeouts.delete(userId);
-    }, TIMEOUTS.SAVE_DEBOUNCE));
+    // Debounced save per session - resolves with the real remote result
+    cancelPendingSaves(sessionToken);
 
-    return { success: true, error: null };
+    return new Promise(resolve => {
+        const pendingSave = { timeoutId: null, resolve };
+        pendingSave.timeoutId = setTimeout(async () => {
+            if (saveTimeouts.get(sessionToken) === pendingSave) {
+                saveTimeouts.delete(sessionToken);
+            }
+            try {
+                resolve(await enqueueSave(sessionToken, doSave));
+            } catch (error) {
+                resolve({
+                    success: false,
+                    error: `Erreur de sauvegarde: ${error.message}`
+                });
+            }
+        }, TIMEOUTS.SAVE_DEBOUNCE);
+
+        saveTimeouts.set(sessionToken, pendingSave);
+    });
 }
 
 /**
  * Clear/reset session data for a specific user
  * Uses secure RPC function
- * @param {string} userId - The user's UUID
+ * @param {string} sessionToken - The authenticated session token
  * @returns {Promise<{success: boolean, error: string|null}>}
  */
-export async function clearSession(userId) {
+export async function clearSession(sessionToken) {
     if (!isSupabaseConfigured()) {
         return { success: false, error: 'Supabase non configuré' };
     }
 
-    if (!userId) {
-        return { success: false, error: 'User ID requis' };
+    if (!sessionToken) {
+        return { success: false, error: 'Token de session requis' };
     }
 
     try {
-        const { error } = await supabase.rpc('clear_user_session', {
-            p_user_id: userId
+        const { error } = await rpcWithTimeout('clear_user_session_v2', {
+            p_session_token: sessionToken
         });
 
         if (error) throw error;
@@ -184,16 +242,18 @@ export async function clearSession(userId) {
  * Uses a lightweight RPC call
  * @returns {Promise<{connected: boolean, error: string|null}>}
  */
-export async function checkSupabaseConnection() {
+export async function checkSupabaseConnection(sessionToken) {
     if (!isSupabaseConfigured()) {
         return { connected: false, error: 'Variables d\'environnement Supabase manquantes (VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY)' };
     }
 
+    if (!sessionToken) {
+        return { connected: false, error: 'Token de session requis' };
+    }
+
     try {
-        // Use a simple RPC call to test connection
-        // The RPC will return empty if no session exists, which is fine
-        const { error } = await supabase.rpc('load_user_session', {
-            p_user_id: '00000000-0000-0000-0000-000000000000'
+        const { error } = await rpcWithTimeout('load_user_session_v2', {
+            p_session_token: sessionToken
         });
 
         // Even if the query returns no rows, the connection is valid

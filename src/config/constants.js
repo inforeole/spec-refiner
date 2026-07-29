@@ -12,6 +12,7 @@ export const API_CONFIG = {
 export const TIMEOUTS = {
     PDF_PROCESSING: 60000,      // PDF peut être lent
     FILE_PROCESSING: 30000,     // Autres fichiers
+    SUPABASE_RPC: 15000,        // Empêche un appel DB de bloquer l'interface
     SAVE_DEBOUNCE: 1000         // Délai avant sauvegarde auto
 };
 

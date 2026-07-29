@@ -11,8 +11,12 @@ vi.mock('../services/imageService', () => ({
     uploadImage: vi.fn()
 }));
 
+vi.mock('../services/summaryService', () => ({
+    generateFileSummary: vi.fn().mockResolvedValue('Résumé du fichier')
+}));
+
 vi.mock('../prompts/systemPrompt', () => ({
-    SYSTEM_PROMPT: 'System prompt de test'
+    getSystemPrompt: vi.fn(() => 'System prompt de test')
 }));
 
 vi.mock('../config/constants', () => ({
@@ -37,7 +41,10 @@ describe('useInterviewChat', () => {
             }),
             updatePhase: vi.fn(),
             updateQuestionCount: vi.fn(),
-            updateFinalSpec: vi.fn()
+            updateFinalSpec: vi.fn(),
+            isModificationMode: false,
+            exitModificationMode: vi.fn(),
+            updateMessageCountAtLastSpec: vi.fn()
         };
 
         // Default mock implementations
@@ -140,7 +147,7 @@ describe('useInterviewChat', () => {
 
         it('gère le marker SPEC_COMPLETE', async () => {
             callAPIWithRetry.mockResolvedValue({
-                response: '[SPEC_COMPLETE] Specifications finales',
+                response: '[SPEC_COMPLETE] # Cahier des Charges\n\nSpecifications finales',
                 isValid: true
             });
 
@@ -150,7 +157,7 @@ describe('useInterviewChat', () => {
                 await result.current.sendMessage('Génère les specs', []);
             });
 
-            expect(mockSessionHook.updateFinalSpec).toHaveBeenCalledWith('Specifications finales');
+            expect(mockSessionHook.updateFinalSpec).toHaveBeenCalledWith('# Cahier des Charges\n\nSpecifications finales');
             expect(mockSessionHook.updatePhase).toHaveBeenCalledWith('complete');
         });
 
@@ -208,7 +215,7 @@ describe('useInterviewChat', () => {
     describe('requestFinalSpec', () => {
         it('demande la génération du spec', async () => {
             callAPIWithRetry.mockResolvedValue({
-                response: '[SPEC_COMPLETE] Le spec final',
+                response: '[SPEC_COMPLETE] # Cahier des Charges\n\nLe spec final',
                 isValid: true
             });
 
@@ -218,7 +225,7 @@ describe('useInterviewChat', () => {
                 await result.current.requestFinalSpec();
             });
 
-            expect(mockSessionHook.updateFinalSpec).toHaveBeenCalledWith('Le spec final');
+            expect(mockSessionHook.updateFinalSpec).toHaveBeenCalledWith('# Cahier des Charges\n\nLe spec final');
             expect(mockSessionHook.updatePhase).toHaveBeenCalledWith('complete');
         });
 
@@ -237,6 +244,47 @@ describe('useInterviewChat', () => {
             });
 
             expect(success).toBe(false);
+            expect(alertMock).toHaveBeenCalled();
+            alertMock.mockRestore();
+        });
+
+        it('refuse une réponse valide sans marqueur de complétion', async () => {
+            const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
+            callAPIWithRetry.mockResolvedValue({
+                response: '# Cahier des Charges\n\nLe spec final',
+                isValid: true
+            });
+
+            const { result } = renderHook(() => useInterviewChat(mockSessionHook));
+
+            let success;
+            await act(async () => {
+                success = await result.current.requestFinalSpec();
+            });
+
+            expect(success).toBe(false);
+            expect(mockSessionHook.updateFinalSpec).not.toHaveBeenCalled();
+            expect(mockSessionHook.updatePhase).not.toHaveBeenCalledWith('complete');
+            expect(alertMock).toHaveBeenCalled();
+            alertMock.mockRestore();
+        });
+
+        it('refuse un marqueur sans document', async () => {
+            const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
+            callAPIWithRetry.mockResolvedValue({
+                response: '[SPEC_COMPLETE]',
+                isValid: true
+            });
+
+            const { result } = renderHook(() => useInterviewChat(mockSessionHook));
+
+            let success;
+            await act(async () => {
+                success = await result.current.requestFinalSpec();
+            });
+
+            expect(success).toBe(false);
+            expect(mockSessionHook.updateFinalSpec).not.toHaveBeenCalled();
             expect(alertMock).toHaveBeenCalled();
             alertMock.mockRestore();
         });

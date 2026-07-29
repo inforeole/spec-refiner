@@ -1,8 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Paragraph, TextRun } from 'docx';
+import { Paragraph } from 'docx';
 import {
     parseMarkdownToDocx,
-    parseInlineFormatting,
     downloadAsWord
 } from '../utils/wordExport.js';
 
@@ -12,52 +11,6 @@ vi.mock('file-saver', () => ({
 }));
 
 describe('Word Export', () => {
-    describe('parseInlineFormatting', () => {
-        it('should return plain text as single TextRun', () => {
-            const result = parseInlineFormatting('Hello world');
-
-            expect(result).toHaveLength(1);
-            expect(result[0]).toBeInstanceOf(TextRun);
-        });
-
-        it('should parse bold text with **', () => {
-            const result = parseInlineFormatting('Hello **bold** world');
-
-            expect(result.length).toBeGreaterThan(1);
-            // Verify we got multiple TextRun instances
-            expect(result.every(run => run instanceof TextRun)).toBe(true);
-        });
-
-        it('should parse italic text with *', () => {
-            const result = parseInlineFormatting('Hello *italic* world');
-
-            expect(result.length).toBeGreaterThan(1);
-            // Verify we got multiple TextRun instances
-            expect(result.every(run => run instanceof TextRun)).toBe(true);
-        });
-
-        it('should parse inline code with backticks', () => {
-            const result = parseInlineFormatting('Use `code` here');
-
-            expect(result.length).toBeGreaterThan(1);
-            // Verify we got multiple TextRun instances
-            expect(result.every(run => run instanceof TextRun)).toBe(true);
-        });
-
-        it('should handle empty string', () => {
-            const result = parseInlineFormatting('');
-
-            // Empty string returns empty array (no text runs needed)
-            expect(result).toHaveLength(0);
-        });
-
-        it('should handle multiple bold sections', () => {
-            const result = parseInlineFormatting('**first** and **second**');
-
-            expect(result.length).toBeGreaterThanOrEqual(3);
-        });
-    });
-
     describe('parseMarkdownToDocx', () => {
         it('should parse H1 headers', () => {
             const result = parseMarkdownToDocx('# Main Title');

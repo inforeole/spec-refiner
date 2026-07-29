@@ -26,7 +26,7 @@ export default function SpecRefiner() {
         logout
     } = useAuth();
 
-    const sessionHook = useSession(user?.id);
+    const sessionHook = useSession(user?.id, user?.sessionToken);
     const {
         messages,
         phase,
@@ -35,6 +35,7 @@ export default function SpecRefiner() {
         messageCountAtLastSpec,
         isLoading: isSessionLoading,
         connectionError,
+        saveError,
         updatePhase,
         resetSession
     } = sessionHook;
@@ -72,7 +73,7 @@ export default function SpecRefiner() {
         autoPlayEnabled,
         playAudio,
         toggleAutoPlay
-    } = useTTSMessage(messages, user?.id);
+    } = useTTSMessage(messages, user?.id, isSessionLoading);
 
     const { handleSendMessage } = useMessageFlow({
         chatInput: { inputMessage, chatFiles, clearInput, processCurrentFiles },
@@ -89,8 +90,8 @@ export default function SpecRefiner() {
         if (!confirm(confirmMessage)) return;
 
         abortRequest();
-        await resetSession();
         clearInput();
+        await resetSession();
     };
 
     const reset = () => resetWithConfirmation('Voulez-vous vraiment recommencer ? Tout l\'historique sera effacé.');
@@ -181,6 +182,11 @@ Dis-moi ce que tu voudrais changer ou préciser !`
     // User header component
     const UserHeader = () => (
         <div className="fixed top-0 right-0 p-4 z-50 flex items-center gap-3">
+            {saveError && (
+                <span role="alert" className="text-red-300 text-sm">
+                    Session non sauvegardée
+                </span>
+            )}
             <span className="text-slate-400 text-sm">{user?.email}</span>
             <button
                 onClick={handleLogout}

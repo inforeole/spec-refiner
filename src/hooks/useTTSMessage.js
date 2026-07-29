@@ -9,8 +9,9 @@ import { useTTS } from './useTTS';
 /**
  * @param {Array} messages - Chat messages
  * @param {string|null} userId - Current user ID for cleanup on user change
+ * @param {boolean} isSessionLoading - Whether the current user's history is loading
  */
-export function useTTSMessage(messages, userId) {
+export function useTTSMessage(messages, userId, isSessionLoading = false) {
     const {
         isPlaying: isPlayingAudio,
         isLoading: isLoadingAudio,
@@ -18,12 +19,15 @@ export function useTTSMessage(messages, userId) {
         autoPlayEnabled,
         play: playAudio,
         toggleAutoPlay,
-        preloadAudio
+        preloadAudio,
+        reset: resetAudio
     } = useTTS(userId);
 
     const messagesEndRef = useRef(null);
     // Initialize to 0 to properly detect the first message
     const lastMessageCountRef = useRef(0);
+    const lastUserIdRef = useRef(userId);
+    const awaitingSessionRestoreRef = useRef(false);
 
     // Auto-scroll to bottom when messages change
     useEffect(() => {
@@ -36,6 +40,33 @@ export function useTTSMessage(messages, userId) {
         const prevCount = lastMessageCountRef.current;
         const currCount = messages.length;
 
+        if (lastUserIdRef.current !== userId) {
+            lastUserIdRef.current = userId;
+            awaitingSessionRestoreRef.current = true;
+            lastMessageCountRef.current = currCount;
+            return;
+        }
+
+        if (awaitingSessionRestoreRef.current) {
+            lastMessageCountRef.current = currCount;
+            if (!isSessionLoading) {
+                awaitingSessionRestoreRef.current = false;
+            }
+            return;
+        }
+
+        if (isSessionLoading) {
+            lastMessageCountRef.current = currCount;
+            return;
+        }
+
+        // Messages were cleared (session reset) - sync ref and clear TTS state
+        if (currCount < prevCount) {
+            resetAudio();
+            lastMessageCountRef.current = currCount;
+            return;
+        }
+
         // No messages yet or only welcome message
         if (currCount <= 1) {
             lastMessageCountRef.current = currCount;
@@ -47,27 +78,30 @@ export function useTTSMessage(messages, userId) {
             return;
         }
 
-        // Messages were cleared (session reset) - sync ref
-        if (currCount < prevCount) {
-            lastMessageCountRef.current = currCount;
-            return;
-        }
-
         // New messages detected (currCount > prevCount)
         // Only play if this is a genuinely new message (not session restore)
         if (prevCount > 0) {
             const lastMessage = messages[currCount - 1];
             if (lastMessage.role === 'assistant') {
                 const messageId = currCount - 1;
-                preloadAudio(lastMessage.content, messageId);
                 if (autoPlayEnabled) {
                     playAudio(lastMessage.content, messageId);
+                } else {
+                    preloadAudio(lastMessage.content, messageId);
                 }
             }
         }
 
         lastMessageCountRef.current = currCount;
-    }, [messages, autoPlayEnabled, playAudio, preloadAudio]);
+    }, [
+        messages,
+        userId,
+        isSessionLoading,
+        autoPlayEnabled,
+        playAudio,
+        preloadAudio,
+        resetAudio
+    ]);
 
     return {
         messagesEndRef,

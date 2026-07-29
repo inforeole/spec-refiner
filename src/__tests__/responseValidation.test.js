@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isValidResponse } from '../utils/responseValidation';
+import { extractFinalSpec, isValidResponse } from '../utils/responseValidation';
 
 describe('isValidResponse', () => {
     describe('rejette les réponses invalides', () => {
@@ -25,6 +25,10 @@ describe('isValidResponse', () => {
 
         it('rejette un objet', () => {
             expect(isValidResponse({ text: 'hello' })).toBe(false);
+        });
+
+        it('rejette un marqueur de spécification sans document', () => {
+            expect(isValidResponse('[SPEC_COMPLETE]')).toBe(false);
         });
     });
 
@@ -87,5 +91,25 @@ describe('isValidResponse', () => {
         it('gère les espaces multiples', () => {
             expect(isValidResponse('Bonjour    je   suis   là   pour   toi.')).toBe(true);
         });
+    });
+});
+
+describe('extractFinalSpec', () => {
+    it('rejette une réponse sans marqueur', () => {
+        expect(extractFinalSpec('# Cahier des Charges\n\nContenu valide')).toBe(null);
+    });
+
+    it('rejette un marqueur sans contenu', () => {
+        expect(extractFinalSpec('[SPEC_COMPLETE]   ')).toBe(null);
+    });
+
+    it('rejette un contenu sans titre markdown', () => {
+        expect(extractFinalSpec('[SPEC_COMPLETE] Quelques spécifications')).toBe(null);
+    });
+
+    it('retourne le document markdown après le marqueur', () => {
+        expect(extractFinalSpec(
+            'Préambule\n[SPEC_COMPLETE]\n# Cahier des Charges\n\nContenu valide'
+        )).toBe('# Cahier des Charges\n\nContenu valide');
     });
 });

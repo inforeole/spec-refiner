@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "infisical run --domain http://infisical.mesh:8080 -- vite",
     "build": "infisical run --domain http://infisical.mesh:8080 -- vite build",
+    "build:ci": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0",
     "preview": "infisical run --domain http://infisical.mesh:8080 -- vite preview",
     "test": "vitest run",

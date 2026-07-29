@@ -8,9 +8,21 @@ import { parseFileMarkers, extractImageUrls } from '../services/parseFileMarkers
  * Composant pour afficher le contenu d'un message utilisateur avec fichiers
  */
 function UserMessageContent({ content, apiContent }) {
+    const contentWithAttachments = useMemo(() => {
+        const apiTextContent = typeof apiContent === 'string'
+            ? apiContent
+            : Array.isArray(apiContent)
+                ? apiContent.find(item => item.type === 'text')?.text
+                : null;
+
+        return apiTextContent?.includes('Documents attachés :')
+            ? apiTextContent
+            : content;
+    }, [content, apiContent]);
+
     const { cleanContent, files } = useMemo(
-        () => parseFileMarkers(content),
-        [content]
+        () => parseFileMarkers(contentWithAttachments),
+        [contentWithAttachments]
     );
 
     const images = useMemo(

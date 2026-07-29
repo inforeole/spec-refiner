@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -23,7 +23,7 @@ Spec Refiner is a French-language AI-powered SaaS project specification tool. Us
 - **INTERDIT** : Déployer sans validation explicite
 
 **Commandes autorisées librement :**
-- `npm run dev`, `npm run build`, `npm run lint`, `npm install`, `npm run preview`
+- `bun run dev`, `bun run build`, `bun run build:ci`, `bun run lint`, `bun run test`, `bun install`, `bun run preview`
 
 **Git Workflow :**
 - **Branche principale** : `main` (production)
@@ -42,6 +42,8 @@ bun install          # Install dependencies
 bun run dev          # Start dev server (Vite, port 5173)
 bun run build        # Production build to dist/
 bun run lint         # ESLint (strict: --max-warnings 0)
+bun run test         # Vitest en exécution unique
+bun run build:ci     # Build local ou CI sans injection Infisical
 bun run preview      # Preview production build
 ```
 
@@ -93,7 +95,10 @@ INWORLD_API_KEY         # Secret Edge Function uniquement
 - RLS activé sur `specrefiner_users` et `specrefiner_sessions`
 - Toutes les opérations passent par des RPCs `SECURITY DEFINER`
 - Pas d'accès direct aux tables depuis le client
-- RPCs sécurisées : `login_user_secure`, `load_user_session`, `save_user_session`, `clear_user_session`
+- RPCs de session utilisées par le client : `load_user_session_v2`, `save_user_session_v2`, `clear_user_session_v2`
+- Les RPCs de session v2 déduisent toujours l'utilisateur depuis `p_session_token` et n'acceptent aucun `user_id` client.
+- Les anciennes RPCs `load_user_session`, `save_user_session`, `clear_user_session` restent temporairement disponibles pour le déploiement progressif et doivent être révoquées après validation du client en production.
+- La RPC interne `create_user` n'est plus exécutable par `PUBLIC`, `anon` ou `authenticated`.
 - RPCs admin : `admin_create_user`, `admin_list_users`, `admin_delete_user` (exigent `p_session_token` d'un compte `is_admin` ; helpers `assert_session_admin` / `is_session_admin`)
 - Les proxies IA exigent un token de session, imposent le modèle et les plafonds, limitent la taille des requêtes et appliquent un rate limit atomique par utilisateur.
 - La vérification JWT plateforme des Edge Functions est désactivée, car l'authentification applicative est effectuée côté serveur par `consume_specrefiner_api_rate_limit`.
@@ -108,7 +113,8 @@ INWORLD_API_KEY         # Secret Edge Function uniquement
 
 **State Persistence:**
 - `sessionStorage` - Auth state (`spec-refiner-auth` : user object JSON)
-- `localStorage` - Session data par user (`spec-refiner-session-{userId}`: messages, specs, phase)
+- Supabase - Session applicative associée au token via les RPCs v2.
+- `localStorage` - Préférence locale d'activation du TTS uniquement.
 
 ## Tech Stack
 
@@ -146,6 +152,7 @@ Supports: Images (base64), PDF (text extraction), DOCX (text extraction), TXT, M
 
 Vercel utilise Bun avec `bun install --frozen-lockfile` et `bun x vite build`.
 La production publique est `https://spec.inforeole.fr`.
+GitHub Actions exécute installation figée, lint, tests et build sur chaque pull request et chaque push vers `main`.
 
 ## Security Setup (Supabase)
 
@@ -155,6 +162,13 @@ La production publique est `https://spec.inforeole.fr`.
 2. `002_api_proxy_auth.sql`
 3. `003_admin_via_session.sql`
 4. `20260729150938_api_proxy_rate_limit.sql`
+5. `20260729194159_secure_session_rpcs.sql`
+6. `20260729201527_fix_api_rate_limit_conflict.sql`
+7. `20260729202858_revoke_legacy_session_rpcs.sql`
+
+La migration 5 ajoute les RPCs de session v2 et révoque l'appel public direct à `create_user`.
+La migration 6 corrige l'ambiguïté SQL du rate limiter et durcit son `search_path`.
+La migration 7 révoque les anciennes RPCs après validation transactionnelle avec deux utilisateurs et deux tokens temporaires.
 
 Déployer ensuite les Edge Functions `openrouter` et `inworld` avec leurs secrets serveur.
 Ne jamais recréer `specrefiner_config.admin_token`, `VITE_ADMIN_TOKEN`, `VITE_APP_PASSWORD`, `VITE_OPENROUTER_API_KEY` ou `VITE_INWORLD_API_KEY`.
@@ -219,7 +233,7 @@ Système automatique de logging et d'analyse pour améliorer les pratiques de d�
 
 **Utilisation :**
 ```bash
-npm run postmortem   # Génère un rapport d'analyse
+bun run postmortem   # Génère un rapport d'analyse
 ```
 
 **Le rapport inclut :**
