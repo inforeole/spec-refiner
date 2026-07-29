@@ -9,10 +9,10 @@ export interface InworldRequestBody {
   temperature: number;
 }
 
-const VOICE_ID = "default-o-lizv8yves-5uhgzcrjog__ok";
+const VOICE_ID = "default-o-lizv8yves-5uhgzcrjog__vanessa";
 const MODEL_ID = "inworld-tts-1.5-mini";
-const SPEAKING_RATE = 0.8;
-const TEMPERATURE = 1.0;
+const SPEAKING_RATE = 1.05;
+const TEMPERATURE = 1.5;
 
 export function buildInworldRequestBody(text: string): InworldRequestBody {
   return {
