@@ -1,47 +1,58 @@
 # Spec Refiner
 
-Application d'aide à la spécification de projets SaaS, propulsée par l'IA (Claude 3.5 Sonnet via OpenRouter).
+Application française d'entretien guidé qui transforme une idée de projet en cahier des charges structuré.
+
+## Prérequis
+
+- Bun 1.3.14.
+- Accès au projet Infisical `spec-refiner` pour le développement local.
+- Un projet Supabase avec les migrations du dossier `supabase/migrations/`.
 
 ## Installation
 
-1.  Cloner le repo
-2.  `npm install`
-3.  Créer un fichier `.env` (voir `.env.example` ou ci-dessous)
-4.  `npm run dev`
-
-## Configuration (.env)
-
-```env
-VITE_OPENROUTER_API_KEY=sk-or-v1-......
-VITE_APP_PASSWORD=Vive2026#
+```bash
+bun install --frozen-lockfile
+bun run dev
 ```
 
-## Déploiement sur Vercel (Recommandé)
+`bun run dev` injecte la configuration locale avec Infisical.
 
-Le moyen le plus simple de mettre en ligne cette application est d'utiliser [Vercel](https://vercel.com).
+Aucun fichier `.env` contenant des secrets ne doit être commité.
 
-### Option 1 : Via l'interface Web (Si le code est sur GitHub)
-1.  Poussez votre code sur GitHub.
-2.  Allez sur [Vercel](https://vercel.com/new).
-3.  Importez votre repo GitHub.
-4.  Dans la section "Environment Variables", ajoutez :
-    - `VITE_OPENROUTER_API_KEY` : Votre clé API OpenRouter.
-    - `VITE_APP_PASSWORD` : `Vive2026#` (ou autre mot de passe de votre choix).
-5.  Cliquez sur **Deploy**.
+## Configuration
 
-### Option 2 : Via la ligne de commande (Directement depuis votre ordinateur)
-1.  Installez Vercel CLI :
-    ```bash
-    npm i -g vercel
-    ```
-2.  Dans le dossier du projet, lancez :
-    ```bash
-    vercel
-    ```
-3.  Suivez les instructions (répondez `Y` à "Set up and deploy?").
-4.  Quand on vous demande de configurer les variables d'environnement, dites `N` si vous voulez le faire plus tard dans l'interface web, ou `Y` pour les entrer maintenant.
-    - Important : N'oubliez pas d'ajouter `VITE_OPENROUTER_API_KEY` et `VITE_APP_PASSWORD` dans les réglages du projet sur le tableau de bord Vercel (Settings > Environment Variables) si vous ne l'avez pas fait pendant la commande.
-5.  Pour mettre à jour en production :
-    ```bash
-    vercel --prod
-    ```
+Le navigateur reçoit uniquement les deux valeurs publiques nécessaires au client Supabase:
+
+```env
+VITE_SUPABASE_URL=https://<projet>.supabase.co
+VITE_SUPABASE_ANON_KEY=<clé-anon-publique>
+```
+
+Les clés OpenRouter et Inworld restent dans les secrets serveur des Edge Functions Supabase.
+
+Aucun mot de passe applicatif ou token administrateur ne doit utiliser le préfixe `VITE_`.
+
+## Validation
+
+```bash
+bun run lint
+bun run test
+bun run build:ci
+```
+
+GitHub Actions exécute ces contrôles sur chaque pull request et chaque push vers `main`.
+
+## Déploiement
+
+Le déploiement de sécurité suit cet ordre:
+
+1. Appliquer les migrations Supabase dans l'ordre.
+2. Déployer les Edge Functions nécessaires.
+3. Déployer le client Vite.
+4. Vérifier les parcours de connexion, session, entretien, génération et réinitialisation.
+
+La migration `20260729194159_secure_session_rpcs.sql` doit être appliquée avant le client qui appelle les RPC de session v2.
+
+Les anciennes RPC de session doivent être révoquées dans une migration séparée seulement après validation du client v2 en production.
+
+La procédure détaillée et les contraintes de production vivent dans `AGENTS.md` et `DEPLOYMENT-TODO.md`.

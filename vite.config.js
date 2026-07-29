@@ -11,7 +11,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
-    // Ne pas scanner les copies de repo dans les worktrees Claude (tests obsolètes).
-    exclude: [...configDefaults.exclude, '**/.claude/**'],
+    // Ne pas scanner les copies de repo dans les worktrees locaux.
+    exclude: [...configDefaults.exclude, '**/.claude/**', '**/.worktrees/**'],
   },
 })
