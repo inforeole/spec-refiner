@@ -77,4 +77,4 @@ Les correctifs applicatifs restent localisés dans les services et hooks existan
 - [x] Exécuter le build CI.
 - [x] Relire le diff et vérifier l'absence de secrets.
 - [x] Committer par lots cohérents.
-- [ ] Pousser la branche et ouvrir une PR sans la fusionner ni la déployer.
+- [x] Pousser la branche et ouvrir une PR sans la fusionner ni la déployer.
