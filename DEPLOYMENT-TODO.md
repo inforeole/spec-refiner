@@ -4,6 +4,7 @@
 > Les proxies refusent les requêtes sans session avec un HTTP 401.
 > La connexion publique fonctionne et le bundle de production ne contient plus les clés tierces.
 > `OPENROUTER_API_KEY` est configurée côté serveur et les appels directs aux deux modèles autorisés répondent HTTP 200.
+> Les routes OpenRouter `summary` et `interview` répondent HTTP 200 via une session applicative réelle et retournent les modèles attendus.
 > `INWORLD_API_KEY` est présent, mais le TTS n'a pas été testé avec un compte réel.
 
 ## Contexte
@@ -29,6 +30,10 @@ Les anciennes clés OpenRouter et Inworld ont été révoquées.
 - Les résumés sont routés côté serveur vers `anthropic/claude-haiku-4.5` avec un plafond de 256 tokens.
 - L’entretien et la spécification sont routés côté serveur vers `anthropic/claude-sonnet-4.6` avec un plafond de 8 192 tokens.
 - Un appel direct avec la clé dédiée vers chacun de ces modèles répond HTTP 200.
+- Un test E2E authentifié appelle le proxy de production avec une session applicative réelle.
+- La route `summary` retourne `anthropic/claude-haiku-4.5` avec un contenu non vide.
+- La route `interview` retourne `anthropic/claude-sonnet-4.6` avec un contenu non vide.
+- Le compte temporaire du test et ses données en cascade sont supprimés, puis un contrôle confirme zéro compte résiduel.
 - `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` sont configurées dans Vercel.
 - Le frontend sécurisé est déployé sur `https://spec.inforeole.fr`.
 - Le RPC de connexion répond HTTP 200 avec la clé publique actuellement servie.
@@ -45,14 +50,14 @@ Les anciennes clés OpenRouter et Inworld ont été révoquées.
 
 ## Étapes restantes
 
-1. Tester en production avec un compte réel un échange d’interview, une lecture TTS et une génération de spécification.
-2. Vérifier dans les logs OpenRouter que seul le modèle autorisé est utilisé.
+1. Tester en production avec un compte réel une lecture TTS et une génération complète de spécification.
+2. Vérifier périodiquement dans les logs OpenRouter qu’aucun autre modèle n’est utilisé.
 
 ## Vérifications de sécurité post-déploiement
 
 - Le bundle de production ne contient aucune clé OpenRouter ou Inworld.
 - Un appel du proxy sans `X-Session-Token` valide renvoie HTTP 401.
-- Les logs OpenRouter montrent uniquement `anthropic/claude-haiku-4.5` pour les résumés et `anthropic/claude-sonnet-4.6` pour l’entretien.
+- Un appel E2E authentifié confirme `anthropic/claude-haiku-4.5` pour les résumés et `anthropic/claude-sonnet-4.6` pour l’entretien.
 
 ## Dette de sécurité fermée
 
