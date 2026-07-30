@@ -50,12 +50,19 @@ describe('apiService', () => {
             const mockResponse = {
                 ok: true,
                 json: () => Promise.resolve({
-                    choices: [{ message: { content: 'Réponse test' } }]
+                    choices: [{
+                        message: {
+                            content: JSON.stringify({
+                                assistantMessage: 'Réponse test',
+                                updates: {}
+                            })
+                        }
+                    }]
                 })
             };
             global.fetch.mockResolvedValue(mockResponse);
 
-            await callOpenRouterAPI({ messages: mockMessages });
+            await callOpenRouterAPI({ messages: mockMessages, task: 'interview' });
 
             // Appel vers l'Edge Function proxy, pas OpenRouter en direct
             expect(global.fetch).toHaveBeenCalledWith(
@@ -81,14 +88,55 @@ describe('apiService', () => {
             const mockResponse = {
                 ok: true,
                 json: () => Promise.resolve({
-                    choices: [{ message: { content: 'Bonjour, je suis là pour t\'aider !' } }]
+                    choices: [{
+                        message: {
+                            content: JSON.stringify({
+                                assistantMessage: 'Bonjour, je suis là pour t’aider !',
+                                updates: {}
+                            })
+                        }
+                    }]
                 })
             };
             global.fetch.mockResolvedValue(mockResponse);
 
-            const result = await callOpenRouterAPI({ messages: mockMessages });
+            const result = await callOpenRouterAPI({
+                messages: mockMessages,
+                task: 'interview'
+            });
 
-            expect(result).toBe('Bonjour, je suis là pour t\'aider !');
+            expect(result).toEqual({
+                assistantMessage: 'Bonjour, je suis là pour t’aider !',
+                updates: {}
+            });
+        });
+
+        it('keeps summaries as plain text', async () => {
+            global.fetch.mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({
+                    choices: [{ message: { content: 'Résumé du document' } }]
+                })
+            });
+
+            await expect(callOpenRouterAPI({
+                messages: mockMessages,
+                task: 'summary'
+            })).resolves.toBe('Résumé du document');
+        });
+
+        it('rejects invalid structured JSON', async () => {
+            global.fetch.mockResolvedValue({
+                ok: true,
+                json: () => Promise.resolve({
+                    choices: [{ message: { content: 'pas du json' } }]
+                })
+            });
+
+            await expect(callOpenRouterAPI({
+                messages: mockMessages,
+                task: 'spec'
+            })).rejects.toThrow('Réponse structurée invalide');
         });
 
         it('lance une erreur si la réponse n\'est pas ok', async () => {
@@ -127,7 +175,11 @@ describe('apiService', () => {
             };
             global.fetch.mockResolvedValue(mockResponse);
 
-            await callOpenRouterAPI({ messages: mockMessages, signal: controller.signal });
+            await callOpenRouterAPI({
+                messages: mockMessages,
+                task: 'summary',
+                signal: controller.signal
+            });
 
             expect(global.fetch).toHaveBeenCalledWith(
                 expect.any(String),
@@ -150,7 +202,10 @@ describe('apiService', () => {
             global.fetch.mockResolvedValue(createSuccessResponse('Réponse valide'));
             isValidResponse.mockReturnValue(true);
 
-            const result = await callAPIWithRetry({ messages: mockMessages });
+            const result = await callAPIWithRetry({
+                messages: mockMessages,
+                task: 'summary'
+            });
 
             expect(result).toEqual({
                 response: 'Réponse valide',
@@ -169,7 +224,10 @@ describe('apiService', () => {
                 .mockReturnValueOnce(true)
                 .mockReturnValue(true);
 
-            const result = await callAPIWithRetry({ messages: mockMessages });
+            const result = await callAPIWithRetry({
+                messages: mockMessages,
+                task: 'summary'
+            });
 
             expect(global.fetch).toHaveBeenCalledTimes(2);
             expect(result.response).toBe('Réponse valide');
@@ -180,7 +238,11 @@ describe('apiService', () => {
             global.fetch.mockResolvedValue(createSuccessResponse('Toujours invalide'));
             isValidResponse.mockReturnValue(false);
 
-            const result = await callAPIWithRetry({ messages: mockMessages, maxRetries: 2 });
+            const result = await callAPIWithRetry({
+                messages: mockMessages,
+                task: 'summary',
+                maxRetries: 2
+            });
 
             // 1 appel initial + 2 retries = 3 appels
             expect(global.fetch).toHaveBeenCalledTimes(3);
@@ -192,7 +254,7 @@ describe('apiService', () => {
             global.fetch.mockResolvedValue(createSuccessResponse('Invalid'));
             isValidResponse.mockReturnValue(false);
 
-            await callAPIWithRetry({ messages: mockMessages });
+            await callAPIWithRetry({ messages: mockMessages, task: 'summary' });
 
             // MAX_RETRIES = 2 dans le mock, donc 1 + 2 = 3 appels
             expect(global.fetch).toHaveBeenCalledTimes(3);
@@ -204,7 +266,11 @@ describe('apiService', () => {
             global.fetch.mockResolvedValue(createSuccessResponse('Invalid'));
             isValidResponse.mockReturnValue(false);
 
-            await callAPIWithRetry({ messages: mockMessages, maxRetries: 2 });
+            await callAPIWithRetry({
+                messages: mockMessages,
+                task: 'summary',
+                maxRetries: 2
+            });
 
             expect(consoleSpy).toHaveBeenCalledTimes(2);
             expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('tentative 1/2'));

@@ -28,6 +28,7 @@ import { uploadImage } from '../services/imageService';
 
 describe('useInterviewChat', () => {
     let mockSessionHook;
+    let createVersion;
 
     beforeEach(() => {
         vi.clearAllMocks();
@@ -42,14 +43,33 @@ describe('useInterviewChat', () => {
             updatePhase: vi.fn(),
             updateQuestionCount: vi.fn(),
             updateFinalSpec: vi.fn(),
+            specModel: {
+                schemaVersion: 1,
+                capabilities: [],
+                requirements: [],
+                decisions: [],
+                themes: []
+            },
+            updateSpecModel: vi.fn(),
             isModificationMode: false,
             exitModificationMode: vi.fn(),
             updateMessageCountAtLastSpec: vi.fn()
         };
+        createVersion = vi.fn().mockResolvedValue({
+            version: {
+                id: 'version-1',
+                content: '# Cahier des Charges\n\nLe document',
+                generated_at: '2026-07-30T13:42:00Z'
+            },
+            error: null
+        });
 
         // Default mock implementations
         callAPIWithRetry.mockResolvedValue({
-            response: 'Réponse de test',
+            response: {
+                assistantMessage: 'Réponse de test',
+                updates: {}
+            },
             isValid: true
         });
 
@@ -145,20 +165,33 @@ describe('useInterviewChat', () => {
             expect(imageContent.image_url.url).toBe('data:image/png;base64,xxx');
         });
 
-        it('gère le marker SPEC_COMPLETE', async () => {
+        it('fusionne les mises à jour structurées et affiche seulement le message', async () => {
             callAPIWithRetry.mockResolvedValue({
-                response: '[SPEC_COMPLETE] # Cahier des Charges\n\nSpecifications finales',
+                response: {
+                    assistantMessage: '[AUDIO]Parlons du périmètre.[/AUDIO]\n\nQuel est le résultat essentiel ?',
+                    updates: {
+                        capabilities: [{
+                            id: 'passport',
+                            name: 'Passeport',
+                            priority: 'required',
+                            sourceIds: ['message-1']
+                        }]
+                    }
+                },
                 isValid: true
             });
 
             const { result } = renderHook(() => useInterviewChat(mockSessionHook));
 
             await act(async () => {
-                await result.current.sendMessage('Génère les specs', []);
+                await result.current.sendMessage('Créer un passeport', []);
             });
 
-            expect(mockSessionHook.updateFinalSpec).toHaveBeenCalledWith('# Cahier des Charges\n\nSpecifications finales');
-            expect(mockSessionHook.updatePhase).toHaveBeenCalledWith('complete');
+            expect(mockSessionHook.updateSpecModel).toHaveBeenCalled();
+            expect(mockSessionHook.messages.at(-1).content)
+                .toContain('Quel est le résultat essentiel ?');
+            expect(mockSessionHook.messages.at(-1).content)
+                .not.toContain('capabilities');
         });
 
         it('gère les réponses invalides', async () => {
@@ -215,11 +248,16 @@ describe('useInterviewChat', () => {
     describe('requestFinalSpec', () => {
         it('demande la génération du spec', async () => {
             callAPIWithRetry.mockResolvedValue({
-                response: '[SPEC_COMPLETE] # Cahier des Charges\n\nLe spec final',
+                response: {
+                    markdown: '# Cahier des Charges\n\nLe spec final'
+                },
                 isValid: true
             });
 
-            const { result } = renderHook(() => useInterviewChat(mockSessionHook));
+            const { result } = renderHook(() => useInterviewChat(
+                mockSessionHook,
+                { createVersion }
+            ));
 
             await act(async () => {
                 await result.current.requestFinalSpec();
@@ -227,16 +265,22 @@ describe('useInterviewChat', () => {
 
             expect(mockSessionHook.updateFinalSpec).toHaveBeenCalledWith('# Cahier des Charges\n\nLe spec final');
             expect(mockSessionHook.updatePhase).toHaveBeenCalledWith('complete');
+            expect(createVersion).toHaveBeenCalledWith({
+                content: '# Cahier des Charges\n\nLe spec final',
+                sourceMessageCount: 0
+            });
         });
 
         it('gère les réponses invalides', async () => {
-            const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
             callAPIWithRetry.mockResolvedValue({
                 response: 'Invalid',
                 isValid: false
             });
 
-            const { result } = renderHook(() => useInterviewChat(mockSessionHook));
+            const { result } = renderHook(() => useInterviewChat(
+                mockSessionHook,
+                { createVersion }
+            ));
 
             let success;
             await act(async () => {
@@ -244,18 +288,19 @@ describe('useInterviewChat', () => {
             });
 
             expect(success).toBe(false);
-            expect(alertMock).toHaveBeenCalled();
-            alertMock.mockRestore();
+            expect(result.current.errorMessage).toContain('incohérente');
         });
 
-        it('refuse une réponse valide sans marqueur de complétion', async () => {
-            const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
+        it('refuse une réponse structurée sans document', async () => {
             callAPIWithRetry.mockResolvedValue({
-                response: '# Cahier des Charges\n\nLe spec final',
+                response: {},
                 isValid: true
             });
 
-            const { result } = renderHook(() => useInterviewChat(mockSessionHook));
+            const { result } = renderHook(() => useInterviewChat(
+                mockSessionHook,
+                { createVersion }
+            ));
 
             let success;
             await act(async () => {
@@ -265,18 +310,25 @@ describe('useInterviewChat', () => {
             expect(success).toBe(false);
             expect(mockSessionHook.updateFinalSpec).not.toHaveBeenCalled();
             expect(mockSessionHook.updatePhase).not.toHaveBeenCalledWith('complete');
-            expect(alertMock).toHaveBeenCalled();
-            alertMock.mockRestore();
+            expect(result.current.errorMessage).toContain('vide');
         });
 
-        it('refuse un marqueur sans document', async () => {
-            const alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
+        it('does not show completion until the version is stored', async () => {
             callAPIWithRetry.mockResolvedValue({
-                response: '[SPEC_COMPLETE]',
+                response: {
+                    markdown: '# Cahier des Charges\n\nLe spec final'
+                },
                 isValid: true
             });
+            createVersion.mockResolvedValue({
+                version: null,
+                error: 'Erreur de sauvegarde'
+            });
 
-            const { result } = renderHook(() => useInterviewChat(mockSessionHook));
+            const { result } = renderHook(() => useInterviewChat(
+                mockSessionHook,
+                { createVersion }
+            ));
 
             let success;
             await act(async () => {
@@ -285,8 +337,8 @@ describe('useInterviewChat', () => {
 
             expect(success).toBe(false);
             expect(mockSessionHook.updateFinalSpec).not.toHaveBeenCalled();
-            expect(alertMock).toHaveBeenCalled();
-            alertMock.mockRestore();
+            expect(mockSessionHook.updatePhase).not.toHaveBeenCalledWith('complete');
+            expect(result.current.errorMessage).toContain('Erreur de sauvegarde');
         });
     });
 

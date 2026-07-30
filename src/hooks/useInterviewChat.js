@@ -1,45 +1,73 @@
-import { useState, useRef, useCallback } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { applySpecUpdates } from '../domain/specModel';
+import { evaluateSpecReadiness } from '../domain/specReadiness';
+import { getSystemPrompt } from '../prompts/systemPrompt';
 import { callAPIWithRetry } from '../services/apiService';
 import { uploadImage } from '../services/imageService';
 import { generateFileSummary } from '../services/summaryService';
-import { MARKERS } from '../config/constants';
-import { getSystemPrompt } from '../prompts/systemPrompt';
-import { extractFinalSpec } from '../utils/responseValidation';
 
-/**
- * Hook pour gérer la logique de conversation avec l'API
- * @param {Object} sessionHook - Retour du hook useSession
- * @returns {Object} États et handlers pour le chat
- */
-export function useInterviewChat(sessionHook) {
+function addSourceId(apiContent, sourceId) {
+    const prefix = `[Source: ${sourceId}]\n`;
+    if (typeof apiContent === 'string') {
+        return `${prefix}${apiContent}`;
+    }
+
+    const content = [...apiContent];
+    const textIndex = content.findIndex(item => item.type === 'text');
+    if (textIndex === -1) {
+        content.unshift({ type: 'text', text: prefix.trim() });
+    } else {
+        content[textIndex] = {
+            ...content[textIndex],
+            text: `${prefix}${content[textIndex].text}`
+        };
+    }
+    return content;
+}
+
+function cleanSpecContent(content) {
+    const cleaned = content
+        .replace(/\[AUDIO\][\s\S]*?\[\/AUDIO\]/gi, '')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    const titleMatch = cleaned.match(/^#\s+\S.*$/m);
+    return titleMatch ? cleaned.slice(titleMatch.index).trim() : cleaned;
+}
+
+function isContextLengthError(error) {
+    return Boolean(error.message && (
+        error.message.includes('maximum context length') ||
+        error.message.includes('context_length_exceeded') ||
+        error.message.includes('token')
+    ));
+}
+
+export function useInterviewChat(sessionHook, versionStore = {}) {
     const {
         messages,
+        specModel,
         updateMessages,
         updatePhase,
         updateQuestionCount,
         updateFinalSpec,
-        isModificationMode,
+        updateSpecModel,
         exitModificationMode,
         updateMessageCountAtLastSpec
     } = sessionHook;
+    const { createVersion } = versionStore;
 
     const [isLoading, setIsLoading] = useState(false);
     const [isRegenerating, setIsRegenerating] = useState(false);
     const [errorMessage, setErrorMessage] = useState(null);
     const abortControllerRef = useRef(null);
-    // Garde anti-réentrance : empêche plusieurs générations simultanées
-    // sur clics rapides (les setState React sont asynchrones)
     const isRegeneratingRef = useRef(false);
 
-    /**
-     * Construit l'historique de conversation pour l'API
-     */
     const buildConversationHistory = useCallback((additionalMessage = null) => {
         const history = [
             { role: 'system', content: getSystemPrompt() },
-            ...messages.map(m => ({
-                role: m.role,
-                content: m.apiContent || m.content
+            ...messages.map(message => ({
+                role: message.role,
+                content: message.apiContent || message.content
             }))
         ];
         if (additionalMessage) {
@@ -48,122 +76,72 @@ export function useInterviewChat(sessionHook) {
         return history;
     }, [messages]);
 
-    /**
-     * Appelle l'API avec un AbortController
-     */
-    const callAPI = useCallback(async (conversationHistory) => {
+    const callAPI = useCallback(async (conversationHistory, task) => {
         abortControllerRef.current = new AbortController();
         return callAPIWithRetry({
             messages: conversationHistory,
+            task,
             signal: abortControllerRef.current.signal
         });
     }, []);
 
-    /**
-     * Nettoie le contenu du spec des blocs audio et autres artefacts
-     */
-    const cleanSpecContent = (content) => {
-        let cleaned = content
-            // Supprime les blocs [AUDIO]...[/AUDIO]
-            .replace(/\[AUDIO\][\s\S]*?\[\/AUDIO\]/gi, '')
-            .trim();
-
-        // Cherche le début réel du document (premier titre markdown # ou "Cahier des charges")
-        // L'IA peut ajouter du texte de conversation avant le document
-        const titleMatch = cleaned.match(/^(#\s|Cahier des charges)/m);
-        if (titleMatch && titleMatch.index > 0) {
-            // Garde seulement à partir du titre
-            cleaned = cleaned.substring(titleMatch.index);
-        }
-
-        // Supprime les lignes vides multiples résultantes
-        return cleaned
-            .replace(/\n{3,}/g, '\n\n')
-            .trim();
-    };
-
-    /**
-     * Gère la complétion du spec
-     */
-    const handleSpecComplete = useCallback((response) => {
-        const rawSpec = extractFinalSpec(response);
-        if (!rawSpec) {
-            return false;
-        }
-
-        const specContent = cleanSpecContent(rawSpec);
-
-        // Ajouter un message à l'historique pour que l'IA sache que les specs ont été générées
-        // (important si l'utilisateur revient sur l'interview pour faire des modifications)
-        updateMessages(prev => {
-            const newMessages = [...prev, {
+    const finishStoredVersion = useCallback(markdown => {
+        updateMessages(previous => {
+            const next = [...previous, {
                 role: 'assistant',
-                content: '[AUDIO]Voilà, j\'ai généré le document de spécifications ![/AUDIO]\n\n✅ **Les spécifications ont été générées et sont maintenant affichées.**\n\nSi tu veux apporter des modifications, tu pourras revenir me voir.'
+                content: '[AUDIO]Le document est prêt.[/AUDIO]\n\n✅ **Une nouvelle version horodatée des spécifications a été enregistrée.**'
             }];
-            // Mémoriser le nombre de messages au moment de la génération
-            updateMessageCountAtLastSpec(newMessages.length);
-            return newMessages;
+            updateMessageCountAtLastSpec(next.length);
+            return next;
         });
-
-        updateFinalSpec(specContent);
+        updateFinalSpec(markdown);
         updatePhase('complete');
         exitModificationMode();
-        return true;
-    }, [updateMessages, updateFinalSpec, updatePhase, exitModificationMode, updateMessageCountAtLastSpec]);
+    }, [
+        exitModificationMode,
+        updateFinalSpec,
+        updateMessageCountAtLastSpec,
+        updateMessages,
+        updatePhase
+    ]);
 
-    /**
-     * Envoie un message avec fichiers optionnels
-     * @param {string} messageText - Texte du message
-     * @param {Array} processedFiles - Fichiers déjà traités par processFiles()
-     * @returns {Promise<boolean>} true si succès
-     */
     const sendMessage = useCallback(async (messageText, processedFiles = []) => {
         if ((!messageText.trim() && processedFiles.length === 0) || isLoading) {
             return false;
         }
 
         setIsLoading(true);
+        setErrorMessage(null);
 
         try {
             let apiContent = [];
-
             if (processedFiles.length > 0) {
                 let textContent = messageText;
-
-                const textFiles = processedFiles.filter(f => f.type === 'text');
+                const textFiles = processedFiles.filter(file => file.type === 'text');
                 if (textFiles.length > 0) {
                     textContent += '\n\nDocuments attachés :';
-                    textFiles.forEach(f => {
-                        textContent += `\n\n--- ${f.name} ---\n${f.content}`;
-                    });
+                    for (const file of textFiles) {
+                        textContent += `\n\n--- ${file.name} ---\n${file.content}`;
+                    }
                 }
-
                 if (textContent.trim()) {
                     apiContent.push({ type: 'text', text: textContent });
                 }
 
-                // Upload images to Supabase Storage for persistence
-                const imageFiles = processedFiles.filter(f => f.type === 'image');
-                for (const f of imageFiles) {
-                    const { url, error } = await uploadImage(f.content, f.name);
-                    if (url) {
-                        apiContent.push({
-                            type: 'image_url',
-                            image_url: { url }
-                        });
-                    } else {
+                for (const file of processedFiles.filter(item => item.type === 'image')) {
+                    const { url, error } = await uploadImage(file.content, file.name);
+                    if (!url) {
                         console.warn('Image upload failed:', error);
-                        apiContent.push({
-                            type: 'image_url',
-                            image_url: { url: f.content }
-                        });
                     }
+                    apiContent.push({
+                        type: 'image_url',
+                        image_url: { url: url || file.content }
+                    });
                 }
             } else {
                 apiContent = messageText;
             }
 
-            // Generate summary for the attached file (limited to 1 file)
             let fileSummary = null;
             if (processedFiles.length > 0) {
                 const file = processedFiles[0];
@@ -174,151 +152,147 @@ export function useInterviewChat(sessionHook) {
                         fileSummary = await generateFileSummary(file.content, file.name);
                     } catch (error) {
                         console.warn('Failed to generate file summary:', error);
-                        fileSummary = file.name; // Fallback to filename
+                        fileSummary = file.name;
                     }
                 }
             }
 
-            const displayContent = messageText + (fileSummary ? `\n\n[${fileSummary}]` : '');
+            const displayContent = messageText + (
+                fileSummary ? `\n\n[${fileSummary}]` : ''
+            );
+            const sourceId = `message-${messages.length + 1}`;
+            const sourcedApiContent = addSourceId(apiContent, sourceId);
 
-            updateMessages(prev => [...prev, {
+            updateMessages(previous => [...previous, {
                 role: 'user',
                 content: displayContent,
-                apiContent: apiContent
+                apiContent: sourcedApiContent
             }]);
 
-            const conversationHistory = buildConversationHistory({ role: 'user', content: apiContent });
-            const { response, isValid } = await callAPI(conversationHistory);
+            const conversationHistory = buildConversationHistory({
+                role: 'user',
+                content: sourcedApiContent
+            });
+            const { response, isValid } = await callAPI(
+                conversationHistory,
+                'interview'
+            );
 
             if (!isValid) {
-                console.error('Réponse API invalide après retries:', response);
-                updateMessages(prev => [...prev, {
+                updateMessages(previous => [...previous, {
                     role: 'assistant',
-                    content: '⚠️ Oups ! J\'ai eu un problème technique et ma réponse était incohérente. Peux-tu reformuler ta dernière réponse ou cliquer sur le bouton "Générer les specs" si tu penses qu\'on a assez d\'informations ?'
+                    content: '⚠️ Ma réponse était incohérente. Reformule ta dernière réponse pour continuer.'
                 }]);
-                setIsLoading(false);
                 return false;
             }
 
-            // Si l'IA génère [SPEC_COMPLETE] mais qu'on est en mode modification,
-            // ignorer le marker et continuer la conversation
-            const hasSpecMarker = response.includes(MARKERS.SPEC_COMPLETE);
-
-            if (hasSpecMarker && !isModificationMode) {
-                // Première génération de specs
-                if (!handleSpecComplete(response)) {
-                    updateMessages(prev => [...prev, {
-                        role: 'assistant',
-                        content: '⚠️ Le document généré était vide ou incomplet. Relance la génération des spécifications.'
-                    }]);
-                    setIsLoading(false);
-                    return false;
-                }
-            } else {
-                // Conversation normale OU mode modification (ignorer [SPEC_COMPLETE])
-                let cleanResponse = response;
-                if (hasSpecMarker && isModificationMode) {
-                    // Extraire le texte avant [SPEC_COMPLETE] s'il y en a
-                    const beforeMarker = response.split(MARKERS.SPEC_COMPLETE)[0].trim();
-                    cleanResponse = beforeMarker || 'C\'est noté ! Dis-moi si tu veux modifier autre chose, ou clique sur "Régénérer les specs" pour mettre à jour le document.';
-                }
-                updateMessages(prev => [...prev, { role: 'assistant', content: cleanResponse }]);
-                updateQuestionCount(prev => prev + 1);
-            }
-
-            setIsLoading(false);
+            updateSpecModel(previous => applySpecUpdates(previous, response.updates));
+            updateMessages(previous => [...previous, {
+                role: 'assistant',
+                content: response.assistantMessage
+            }]);
+            updateQuestionCount(previous => previous + 1);
             return true;
         } catch (error) {
             if (error.name === 'AbortError') {
                 return false;
             }
             console.error(error);
-
-            // Détecter erreur de contexte trop long (fichier trop volumineux)
-            const isContextLengthError = error.message &&
-                (error.message.includes('maximum context length') ||
-                 error.message.includes('context_length_exceeded') ||
-                 error.message.includes('token'));
-
-            if (isContextLengthError) {
-                // Retirer le dernier message utilisateur (celui avec le fichier problématique)
-                updateMessages(prev => prev.slice(0, -1));
-                setErrorMessage(`Le fichier envoyé est trop volumineux. Essayez avec un fichier plus petit ou continuez sans fichier.`);
+            if (isContextLengthError(error)) {
+                updateMessages(previous => previous.slice(0, -1));
+                setErrorMessage(
+                    'Le fichier envoyé est trop volumineux. Essaie avec un fichier plus petit ou continue sans fichier.'
+                );
             } else {
-                // Ne pas persister l'erreur dans les messages - utiliser un état temporaire
                 setErrorMessage(error.message);
             }
-
-            setIsLoading(false);
             return false;
+        } finally {
+            setIsLoading(false);
         }
-    }, [isLoading, isModificationMode, buildConversationHistory, callAPI, updateMessages, handleSpecComplete, updateQuestionCount]);
+    }, [
+        buildConversationHistory,
+        callAPI,
+        isLoading,
+        messages.length,
+        updateMessages,
+        updateQuestionCount,
+        updateSpecModel
+    ]);
 
-    /**
-     * Demande la génération du spec final
-     */
     const requestFinalSpec = useCallback(async () => {
-        // Empêche une génération concurrente (double-clic / clics rapides)
         if (isRegeneratingRef.current) {
             return false;
         }
         isRegeneratingRef.current = true;
         setIsRegenerating(true);
+        setErrorMessage(null);
 
+        const readiness = evaluateSpecReadiness(specModel);
         const conversationHistory = buildConversationHistory({
             role: 'user',
-            content: `GÉNÉRATION DU DOCUMENT DE SPÉCIFICATIONS
-
-RÈGLES OBLIGATOIRES:
-1. Réponds avec [SPEC_COMPLETE] suivi IMMÉDIATEMENT du document markdown
-2. Le document DOIT commencer par: # Cahier des Charges
-3. Commence par 2 phrases résumant l'objectif du projet et le problème résolu
-4. NE POSE AUCUNE QUESTION dans le document - utilise [À DÉFINIR] pour les infos manquantes
-5. PAS de bloc [AUDIO] - c'est un document écrit
-6. Structure recommandée: Résumé > Contexte > Utilisateurs > Fonctionnalités > Contraintes techniques > Livrables`
+            content: `Rédige la spécification du lot unique en markdown.
+Le modèle fonctionnel ci-dessous est la source de vérité.
+Les informations manquantes restent marquées [À DÉFINIR].
+État de préparation: ${readiness.generationKind}.
+Modèle:
+${JSON.stringify(specModel)}`
         });
 
         try {
-            const { response, isValid } = await callAPI(conversationHistory);
-
-            if (!isValid || !handleSpecComplete(response)) {
-                alert('La génération des spécifications a échoué (réponse incohérente). Veuillez réessayer.');
+            const { response, isValid } = await callAPI(conversationHistory, 'spec');
+            if (!isValid) {
+                setErrorMessage('La réponse de génération est incohérente.');
                 return false;
             }
 
+            const markdown = cleanSpecContent(response?.markdown || '');
+            if (!markdown) {
+                setErrorMessage('Le document généré est vide.');
+                return false;
+            }
+            if (typeof createVersion !== 'function') {
+                setErrorMessage('Le stockage des versions est indisponible.');
+                return false;
+            }
+
+            const stored = await createVersion({
+                content: markdown,
+                sourceMessageCount: messages.length
+            });
+            if (!stored.version) {
+                setErrorMessage(stored.error || 'Erreur de sauvegarde de la version');
+                return false;
+            }
+
+            finishStoredVersion(markdown);
             return true;
         } catch (error) {
             if (error.name === 'AbortError') {
                 return false;
             }
-
-            // Détecter erreur de contexte trop long
-            const isContextLengthError = error.message &&
-                (error.message.includes('maximum context length') ||
-                 error.message.includes('context_length_exceeded') ||
-                 error.message.includes('token'));
-
-            if (isContextLengthError) {
-                alert('La conversation est trop longue pour générer les spécifications. Essayez de supprimer certains fichiers volumineux de l\'historique ou de commencer une nouvelle session.');
-            } else {
-                alert(`Erreur: ${error.message}`);
-            }
-
+            setErrorMessage(
+                isContextLengthError(error)
+                    ? 'La conversation est trop longue pour générer les spécifications.'
+                    : error.message
+            );
             return false;
         } finally {
             isRegeneratingRef.current = false;
             setIsRegenerating(false);
         }
-    }, [buildConversationHistory, callAPI, handleSpecComplete]);
+    }, [
+        buildConversationHistory,
+        callAPI,
+        createVersion,
+        finishStoredVersion,
+        messages.length,
+        specModel
+    ]);
 
-    /**
-     * Annule la requête en cours
-     */
     const abortRequest = useCallback(() => {
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-            abortControllerRef.current = null;
-        }
+        abortControllerRef.current?.abort();
+        abortControllerRef.current = null;
         setIsLoading(false);
         isRegeneratingRef.current = false;
         setIsRegenerating(false);

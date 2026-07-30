@@ -13,6 +13,7 @@ export default function ChatInput({
     disabled,
     isProcessingFiles,
     showGenerateButton,
+    generationLabel,
     onRequestSpec,
     validationDialog,
     onValidationAction,
@@ -106,10 +107,10 @@ export default function ChatInput({
                             onClick={onRequestSpec}
                             disabled={disabled}
                             className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white px-4 py-3 rounded-xl transition-colors self-end flex items-center gap-2 whitespace-nowrap"
-                            title="Générer les spécifications"
+                            title={generationLabel}
                         >
                             <CheckCircle2 className="w-5 h-5" />
-                            <span className="hidden sm:inline">Générer specs</span>
+                            <span className="hidden sm:inline">{generationLabel}</span>
                         </button>
                     )}
                 </div>

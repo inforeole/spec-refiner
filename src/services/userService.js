@@ -239,3 +239,51 @@ export async function deleteUser(userId) {
         return { success: false, error: `Erreur de suppression: ${e.message}` };
     }
 }
+
+/**
+ * Reset one client's project while keeping the account.
+ * The RPC returns the previous messages so referenced images can be cleaned up.
+ * @param {string} userId
+ * @returns {Promise<{messages: Array, error: string | null}>}
+ */
+export async function resetUserProject(userId) {
+    if (!isSupabaseConfigured()) {
+        return { messages: [], error: 'Supabase non configuré' };
+    }
+
+    const sessionToken = getSessionToken();
+    if (!sessionToken) {
+        return { messages: [], error: 'Session expirée. Reconnecte-toi.' };
+    }
+
+    try {
+        const { data, error } = await supabase.rpc('admin_reset_user_project', {
+            p_session_token: sessionToken,
+            p_target_user_id: userId
+        });
+        if (error) {
+            if (error.message?.includes('Unauthorized')) {
+                return {
+                    messages: [],
+                    error: 'Accès réservé aux administrateurs'
+                };
+            }
+            throw error;
+        }
+
+        const messages = Array.isArray(data?.[0]?.messages)
+            ? data[0].messages
+            : Array.isArray(data)
+                ? data
+                : Array.isArray(data?.messages)
+                    ? data.messages
+                    : [];
+        return { messages, error: null };
+    } catch (error) {
+        console.error('Reset user project failed:', error);
+        return {
+            messages: [],
+            error: `Erreur de réinitialisation: ${error.message}`
+        };
+    }
+}

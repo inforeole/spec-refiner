@@ -3,35 +3,14 @@
  * Uses secure RPC functions - all access goes through SECURITY DEFINER RPCs
  */
 
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { isSupabaseConfigured } from '../lib/supabase';
 import { TIMEOUTS } from '../config/constants';
+import { normalizeSpecModel } from '../domain/specModel';
+import { rpcWithTimeout } from './supabaseRpc';
 
 // Debounce helper for auto-save (per authenticated session)
 const saveTimeouts = new Map();
 const saveQueues = new Map();
-
-async function rpcWithTimeout(functionName, parameters) {
-    const controller = new AbortController();
-    let timeoutId;
-
-    const timeout = new Promise((_, reject) => {
-        timeoutId = setTimeout(() => {
-            controller.abort();
-            reject(new Error('Délai Supabase dépassé'));
-        }, TIMEOUTS.SUPABASE_RPC);
-    });
-
-    const query = supabase.rpc(functionName, parameters);
-    const request = typeof query.abortSignal === 'function'
-        ? query.abortSignal(controller.signal)
-        : query;
-
-    try {
-        return await Promise.race([request, timeout]);
-    } finally {
-        clearTimeout(timeoutId);
-    }
-}
 
 function enqueueSave(sessionToken, saveOperation) {
     const previousSave = saveQueues.get(sessionToken) || Promise.resolve();
@@ -115,7 +94,7 @@ export async function loadSession(sessionToken) {
     }
 
     try {
-        const { data, error } = await rpcWithTimeout('load_user_session_v2', {
+        const { data, error } = await rpcWithTimeout('load_user_session_v3', {
             p_session_token: sessionToken
         });
 
@@ -134,7 +113,8 @@ export async function loadSession(sessionToken) {
                 questionCount: sessionData.question_count || 0,
                 finalSpec: sessionData.final_spec || null,
                 isModificationMode: sessionData.is_modification_mode || false,
-                messageCountAtLastSpec: sessionData.message_count_at_last_spec || 0
+                messageCountAtLastSpec: sessionData.message_count_at_last_spec || 0,
+                specModel: normalizeSpecModel(sessionData.spec_model)
             },
             error: null
         };
@@ -163,14 +143,15 @@ export async function saveSession(sessionToken, data, immediate = false) {
 
     const doSave = async () => {
         try {
-            const { error } = await rpcWithTimeout('save_user_session_v2', {
+            const { error } = await rpcWithTimeout('save_user_session_v3', {
                 p_session_token: sessionToken,
                 p_messages: filterMessagesForStorage(data.messages || []),
                 p_phase: data.phase,
                 p_question_count: data.questionCount,
                 p_final_spec: data.finalSpec,
                 p_is_modification_mode: data.isModificationMode || false,
-                p_message_count_at_last_spec: data.messageCountAtLastSpec || 0
+                p_message_count_at_last_spec: data.messageCountAtLastSpec || 0,
+                p_spec_model: normalizeSpecModel(data.specModel)
             });
 
             if (error) throw error;
@@ -210,34 +191,6 @@ export async function saveSession(sessionToken, data, immediate = false) {
 }
 
 /**
- * Clear/reset session data for a specific user
- * Uses secure RPC function
- * @param {string} sessionToken - The authenticated session token
- * @returns {Promise<{success: boolean, error: string|null}>}
- */
-export async function clearSession(sessionToken) {
-    if (!isSupabaseConfigured()) {
-        return { success: false, error: 'Supabase non configuré' };
-    }
-
-    if (!sessionToken) {
-        return { success: false, error: 'Token de session requis' };
-    }
-
-    try {
-        const { error } = await rpcWithTimeout('clear_user_session_v2', {
-            p_session_token: sessionToken
-        });
-
-        if (error) throw error;
-        return { success: true, error: null };
-    } catch (e) {
-        console.error('Supabase delete failed:', e);
-        return { success: false, error: `Erreur de suppression: ${e.message}` };
-    }
-}
-
-/**
  * Check if Supabase is available and working
  * Uses a lightweight RPC call
  * @returns {Promise<{connected: boolean, error: string|null}>}
@@ -252,7 +205,7 @@ export async function checkSupabaseConnection(sessionToken) {
     }
 
     try {
-        const { error } = await rpcWithTimeout('load_user_session_v2', {
+        const { error } = await rpcWithTimeout('load_user_session_v3', {
             p_session_token: sessionToken
         });
 

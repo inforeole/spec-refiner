@@ -6,18 +6,11 @@ import { useSession } from '../hooks/useSession';
 vi.mock('../services/sessionService', () => ({
     loadSession: vi.fn(),
     saveSession: vi.fn(),
-    clearSession: vi.fn(),
     checkSupabaseConnection: vi.fn(),
     cancelPendingSaves: vi.fn()
 }));
 
-vi.mock('../services/imageService', () => ({
-    deleteImage: vi.fn(),
-    isStorageUrl: vi.fn((url) => url.startsWith('https://'))
-}));
-
-import { loadSession, saveSession, clearSession, checkSupabaseConnection } from '../services/sessionService';
-import { deleteImage } from '../services/imageService';
+import { loadSession, saveSession, checkSupabaseConnection } from '../services/sessionService';
 
 describe('useSession', () => {
     const userId = '11111111-1111-4111-8111-111111111111';
@@ -29,7 +22,6 @@ describe('useSession', () => {
         checkSupabaseConnection.mockResolvedValue({ connected: true, error: null });
         loadSession.mockResolvedValue({ data: null, error: null });
         saveSession.mockResolvedValue({ success: true, error: null });
-        clearSession.mockResolvedValue({ success: true, error: null });
     });
 
     afterEach(() => {
@@ -65,6 +57,8 @@ describe('useSession', () => {
             expect(result.current.messages[0].role).toBe('assistant');
             expect(result.current.phase).toBe('interview');
             expect(result.current.questionCount).toBe(0);
+            expect(result.current.specModel.schemaVersion).toBe(1);
+            expect(result.current.resetSession).toBeUndefined();
             expect(checkSupabaseConnection).toHaveBeenCalledWith(sessionToken);
             expect(loadSession).toHaveBeenCalledWith(sessionToken);
             expect(saveSession).toHaveBeenCalledWith(sessionToken, expect.any(Object), true);
@@ -336,251 +330,4 @@ describe('useSession', () => {
         });
     });
 
-    describe('resetSession', () => {
-        it('supprime les images Storage après la sauvegarde du reset', async () => {
-            const messagesWithImages = [
-                {
-                    role: 'user',
-                    content: 'Voici une image',
-                    apiContent: [
-                        { type: 'text', text: 'Voici une image' },
-                        { type: 'image_url', image_url: { url: 'https://storage.example.com/image1.jpg' } },
-                        { type: 'image_url', image_url: { url: 'data:image/png;base64,xxx' } } // base64, pas Storage
-                    ]
-                }
-            ];
-            loadSession.mockResolvedValue({
-                data: { messages: messagesWithImages, phase: 'interview', questionCount: 0, finalSpec: null },
-                error: null
-            });
-
-            const { result } = renderHook(() => useSession(userId, sessionToken));
-
-            await waitFor(() => {
-                expect(result.current.isLoading).toBe(false);
-            });
-
-            await act(async () => {
-                await result.current.resetSession();
-            });
-
-            // Vérifie que seule l'image Storage a été supprimée
-            expect(deleteImage).toHaveBeenCalledTimes(1);
-            expect(deleteImage).toHaveBeenCalledWith('https://storage.example.com/image1.jpg');
-            expect(clearSession).not.toHaveBeenCalled();
-        });
-
-        it('réinitialise avec le message de bienvenue', async () => {
-            loadSession.mockResolvedValue({
-                data: {
-                    messages: [{ role: 'user', content: 'old' }],
-                    phase: 'complete',
-                    questionCount: 10,
-                    finalSpec: 'old spec'
-                },
-                error: null
-            });
-
-            const { result } = renderHook(() => useSession(userId, sessionToken));
-
-            await waitFor(() => {
-                expect(result.current.isLoading).toBe(false);
-            });
-
-            await act(async () => {
-                await result.current.resetSession();
-            });
-
-            expect(result.current.messages).toHaveLength(1);
-            expect(result.current.messages[0].role).toBe('assistant');
-            expect(result.current.phase).toBe('interview');
-            expect(result.current.questionCount).toBe(0);
-            expect(result.current.finalSpec).toBe(null);
-        });
-
-        it('expose l’échec de sauvegarde de la session réinitialisée', async () => {
-            loadSession.mockResolvedValue({
-                data: {
-                    messages: [{ role: 'user', content: 'old' }],
-                    phase: 'complete',
-                    questionCount: 10,
-                    finalSpec: 'old spec'
-                },
-                error: null
-            });
-            saveSession.mockResolvedValueOnce({
-                success: false,
-                error: 'Reset non sauvegardé'
-            });
-
-            const { result } = renderHook(() => useSession(userId, sessionToken));
-
-            await waitFor(() => {
-                expect(result.current.isLoading).toBe(false);
-            });
-
-            await act(async () => {
-                await result.current.resetSession();
-            });
-
-            expect(result.current.saveError).toBe('Reset non sauvegardé');
-        });
-
-        it('conserve les images si le reset distant échoue complètement', async () => {
-            loadSession.mockResolvedValue({
-                data: {
-                    messages: [{
-                        role: 'user',
-                        content: 'Image',
-                        apiContent: [{
-                            type: 'image_url',
-                            image_url: {
-                                url: 'https://storage.example.com/image.jpg'
-                            }
-                        }]
-                    }],
-                    phase: 'interview',
-                    questionCount: 1,
-                    finalSpec: null
-                },
-                error: null
-            });
-            saveSession.mockResolvedValueOnce({
-                success: false,
-                error: 'Sauvegarde impossible'
-            });
-
-            const { result } = renderHook(() => useSession(userId, sessionToken));
-
-            await waitFor(() => {
-                expect(result.current.isLoading).toBe(false);
-            });
-
-            await act(async () => {
-                await result.current.resetSession();
-            });
-
-            expect(deleteImage).not.toHaveBeenCalled();
-            expect(clearSession).not.toHaveBeenCalled();
-        });
-
-        it('ignore le résultat tardif d’un reset après un changement d’utilisateur', async () => {
-            const secondUserId = '33333333-3333-4333-8333-333333333333';
-            const secondToken = '44444444-4444-4444-8444-444444444444';
-            let resolveFirstReset;
-
-            loadSession.mockImplementation(token => Promise.resolve({
-                data: {
-                    messages: [{
-                        role: 'assistant',
-                        content: token === sessionToken ? 'Session A' : 'Session B'
-                    }],
-                    phase: 'interview',
-                    questionCount: token === sessionToken ? 1 : 2,
-                    finalSpec: null
-                },
-                error: null
-            }));
-            saveSession.mockImplementationOnce(() => new Promise(resolve => {
-                resolveFirstReset = resolve;
-            }));
-
-            const { result, rerender } = renderHook(
-                ({ activeUserId, activeToken }) => useSession(activeUserId, activeToken),
-                {
-                    initialProps: {
-                        activeUserId: userId,
-                        activeToken: sessionToken
-                    }
-                }
-            );
-
-            await waitFor(() => {
-                expect(result.current.messages[0]?.content).toBe('Session A');
-            });
-
-            let resetPromise;
-            act(() => {
-                resetPromise = result.current.resetSession();
-            });
-
-            rerender({
-                activeUserId: secondUserId,
-                activeToken: secondToken
-            });
-
-            await waitFor(() => {
-                expect(result.current.messages[0]?.content).toBe('Session B');
-            });
-
-            await act(async () => {
-                resolveFirstReset({
-                    success: false,
-                    error: 'Ancien reset en échec'
-                });
-                await resetPromise;
-            });
-
-            expect(result.current.messages[0]?.content).toBe('Session B');
-            expect(result.current.saveError).toBe(null);
-        });
-
-        it('efface une erreur de reset quand une sauvegarde plus récente réussit', async () => {
-            let resolveReset;
-            let resolveNewerSave;
-
-            loadSession.mockResolvedValue({
-                data: {
-                    messages: [{ role: 'assistant', content: 'Session active' }],
-                    phase: 'interview',
-                    questionCount: 1,
-                    finalSpec: null
-                },
-                error: null
-            });
-            saveSession
-                .mockImplementationOnce(() => new Promise(resolve => {
-                    resolveReset = resolve;
-                }))
-                .mockImplementationOnce(() => new Promise(resolve => {
-                    resolveNewerSave = resolve;
-                }));
-
-            const { result } = renderHook(() => useSession(userId, sessionToken));
-
-            await waitFor(() => {
-                expect(result.current.isLoading).toBe(false);
-            });
-
-            let resetPromise;
-            act(() => {
-                resetPromise = result.current.resetSession();
-            });
-            act(() => {
-                result.current.updateMessages(prev => [
-                    ...prev,
-                    { role: 'user', content: 'Nouvelle donnée' }
-                ]);
-            });
-
-            await waitFor(() => {
-                expect(saveSession).toHaveBeenCalledTimes(2);
-            });
-
-            await act(async () => {
-                resolveReset({
-                    success: false,
-                    error: 'Ancien reset en échec'
-                });
-                await resetPromise;
-            });
-            expect(result.current.saveError).toBe('Ancien reset en échec');
-
-            await act(async () => {
-                resolveNewerSave({ success: true, error: null });
-            });
-
-            expect(result.current.saveError).toBe(null);
-        });
-    });
 });

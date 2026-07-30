@@ -19,7 +19,6 @@ vi.mock('../config/constants', () => ({
 
 import {
     checkSupabaseConnection,
-    clearSession,
     loadSession,
     saveSession
 } from '../services/sessionService';
@@ -34,49 +33,66 @@ describe('sessionService sécurisé par token', () => {
         rpcMock.mockResolvedValue({ data: [], error: null });
     });
 
-    it('charge la session via la RPC v2 sans identifiant utilisateur', async () => {
+    it('charge la session via la RPC v3 sans identifiant utilisateur', async () => {
         await loadSession(sessionToken);
 
-        expect(rpcMock).toHaveBeenCalledWith('load_user_session_v2', {
+        expect(rpcMock).toHaveBeenCalledWith('load_user_session_v3', {
             p_session_token: sessionToken
         });
     });
 
-    it('sauvegarde immédiatement via la RPC v2 sans identifiant utilisateur', async () => {
+    it('sauvegarde immédiatement via la RPC v3 avec le modèle guidé', async () => {
         const data = {
             messages: [{ role: 'user', content: 'Bonjour' }],
             phase: 'interview',
             questionCount: 2,
             finalSpec: null,
             isModificationMode: false,
-            messageCountAtLastSpec: 0
+            messageCountAtLastSpec: 0,
+            specModel: { schemaVersion: 1, capabilities: [] }
         };
 
         await saveSession(sessionToken, data, true);
 
-        expect(rpcMock).toHaveBeenCalledWith('save_user_session_v2', {
+        expect(rpcMock).toHaveBeenCalledWith('save_user_session_v3', {
             p_session_token: sessionToken,
             p_messages: data.messages,
             p_phase: 'interview',
             p_question_count: 2,
             p_final_spec: null,
             p_is_modification_mode: false,
-            p_message_count_at_last_spec: 0
+            p_message_count_at_last_spec: 0,
+            p_spec_model: expect.objectContaining({
+                schemaVersion: 1,
+                capabilities: [],
+                themes: expect.arrayContaining([
+                    expect.objectContaining({ id: 'scope', status: 'to_explore' })
+                ])
+            })
         });
     });
 
-    it('supprime la session via la RPC v2 sans identifiant utilisateur', async () => {
-        await clearSession(sessionToken);
-
-        expect(rpcMock).toHaveBeenCalledWith('clear_user_session_v2', {
-            p_session_token: sessionToken
+    it('normalise le modèle guidé chargé', async () => {
+        rpcMock.mockResolvedValue({
+            data: [{
+                messages: [],
+                phase: 'interview',
+                question_count: 0,
+                spec_model: { capabilities: null }
+            }],
+            error: null
         });
+
+        const result = await loadSession(sessionToken);
+
+        expect(result.data.specModel.schemaVersion).toBe(1);
+        expect(result.data.specModel.capabilities).toEqual([]);
     });
 
     it('vérifie la connexion avec le token courant', async () => {
         await checkSupabaseConnection(sessionToken);
 
-        expect(rpcMock).toHaveBeenCalledWith('load_user_session_v2', {
+        expect(rpcMock).toHaveBeenCalledWith('load_user_session_v3', {
             p_session_token: sessionToken
         });
     });
@@ -99,11 +115,9 @@ describe('sessionService sécurisé par token', () => {
     it('refuse toute opération sans token', async () => {
         const loadResult = await loadSession(null);
         const saveResult = await saveSession(null, { messages: [] }, true);
-        const clearResult = await clearSession(null);
 
         expect(loadResult.error).toBe('Token de session requis');
         expect(saveResult.error).toBe('Token de session requis');
-        expect(clearResult.error).toBe('Token de session requis');
         expect(rpcMock).not.toHaveBeenCalled();
     });
 

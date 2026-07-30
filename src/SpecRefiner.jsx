@@ -9,6 +9,9 @@ import { useChatInput } from './hooks/useChatInput';
 import { useInterviewChat } from './hooks/useInterviewChat';
 import { useTTSMessage } from './hooks/useTTSMessage';
 import { useMessageFlow } from './hooks/useMessageFlow';
+import { useSpecVersions } from './hooks/useSpecVersions';
+import { buildSpecFilename } from './utils/specVersionFormat';
+import { evaluateSpecReadiness } from './domain/specReadiness';
 
 export default function SpecRefiner() {
     // ==================== Hooks ====================
@@ -30,15 +33,26 @@ export default function SpecRefiner() {
     const {
         messages,
         phase,
-        questionCount,
         finalSpec,
+        specModel,
         messageCountAtLastSpec,
         isLoading: isSessionLoading,
         connectionError,
         saveError,
-        updatePhase,
-        resetSession
+        updatePhase
     } = sessionHook;
+    const {
+        versions,
+        selectedVersion,
+        selectVersion,
+        createVersion,
+        error: versionError
+    } = useSpecVersions(user?.sessionToken);
+    const readiness = evaluateSpecReadiness(specModel);
+    const canGenerate = Boolean(
+        specModel?.scope?.lotName ||
+        specModel?.capabilities?.length > 0
+    );
 
     const {
         inputMessage,
@@ -55,7 +69,15 @@ export default function SpecRefiner() {
         handleValidationCancel
     } = useChatInput(user?.id);
 
-    const { isLoading, isRegenerating, errorMessage, clearError, sendMessage, requestFinalSpec, abortRequest } = useInterviewChat(sessionHook);
+    const {
+        isLoading,
+        isRegenerating,
+        errorMessage,
+        clearError,
+        sendMessage,
+        requestFinalSpec,
+        abortRequest
+    } = useInterviewChat(sessionHook, { createVersion });
 
     // Calculer si nouvelles modifications depuis la dernière génération
     const hasNewMessagesSinceSpec = messages.length > messageCountAtLastSpec;
@@ -83,18 +105,13 @@ export default function SpecRefiner() {
     // ==================== Handlers ====================
 
     const downloadSpec = () => {
-        downloadAsWord(finalSpec, 'specifications.docx');
+        const content = selectedVersion?.content || finalSpec;
+        const generatedAt = selectedVersion?.generated_at || null;
+        const filename = generatedAt
+            ? buildSpecFilename(generatedAt)
+            : 'specifications.docx';
+        downloadAsWord(content, filename, generatedAt);
     };
-
-    const resetWithConfirmation = async (confirmMessage) => {
-        if (!confirm(confirmMessage)) return;
-
-        abortRequest();
-        clearInput();
-        await resetSession();
-    };
-
-    const reset = () => resetWithConfirmation('Voulez-vous vraiment recommencer ? Tout l\'historique sera effacé.');
 
     const regenerate = async () => {
         // Régénérer = refaire le document de specs à partir de la conversation existante
@@ -182,9 +199,9 @@ Dis-moi ce que tu voudrais changer ou préciser !`
     // User header component
     const UserHeader = () => (
         <div className="fixed top-0 right-0 p-4 z-50 flex items-center gap-3">
-            {saveError && (
+            {(saveError || versionError) && (
                 <span role="alert" className="text-red-300 text-sm">
-                    Session non sauvegardée
+                    {saveError ? 'Session non sauvegardée' : 'Historique indisponible'}
                 </span>
             )}
             <span className="text-slate-400 text-sm">{user?.email}</span>
@@ -205,8 +222,10 @@ Dis-moi ce que tu voudrais changer ou préciser !`
                 <InterviewPhase
                     // Session data
                     messages={messages}
-                    questionCount={questionCount}
                     finalSpec={finalSpec}
+                    readiness={readiness}
+                    canGenerate={canGenerate}
+                    generationLabel={readiness.label}
                     // Loading states
                     isLoading={isLoading}
                     isRegenerating={isRegenerating}
@@ -229,7 +248,6 @@ Dis-moi ce que tu voudrais changer ou préciser !`
                     onFileSelect={handleFileSelect}
                     onFileRemove={removeFile}
                     onViewSpec={() => updatePhase('complete')}
-                    onReset={reset}
                     // File validation dialog
                     validationDialog={validationDialog}
                     onValidationAction={handleValidationAction}
@@ -253,13 +271,17 @@ Dis-moi ce que tu voudrais changer ou préciser !`
         <>
             <UserHeader />
             <CompletePhase
-                finalSpec={finalSpec}
+                finalSpec={selectedVersion?.content || finalSpec}
+                generatedAt={selectedVersion?.generated_at || null}
+                versions={versions}
+                selectedVersionId={selectedVersion?.id || null}
+                onSelectVersion={selectVersion}
+                isCurrentVersion={!selectedVersion || selectedVersion.id === versions[0]?.id}
                 isRegenerating={isRegenerating}
                 hasNewMessagesSinceSpec={hasNewMessagesSinceSpec}
                 onBackToInterview={() => updatePhase('interview')}
                 onRegenerate={regenerate}
                 onDownload={downloadSpec}
-                onReset={reset}
                 onRequestModifications={requestModifications}
             />
         </>

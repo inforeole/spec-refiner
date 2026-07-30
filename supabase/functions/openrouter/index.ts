@@ -16,6 +16,7 @@ import {
   UpstreamTimeoutError,
 } from "../_shared/request.ts";
 import { resolveModelRoute } from "./modelRouting.ts";
+import { buildOpenRouterRequest } from "./structuredOutputs.ts";
 
 const MAX_REQUEST_BYTES = 256_000;
 const UPSTREAM_TIMEOUT_MS = 60_000;
@@ -94,6 +95,7 @@ Deno.serve(async (req: Request) => {
   );
 
   try {
+    const upstreamBody = buildOpenRouterRequest(route, messages, cap);
     const upstream = await fetchWithTimeout(
       "https://openrouter.ai/api/v1/chat/completions",
       {
@@ -104,11 +106,7 @@ Deno.serve(async (req: Request) => {
           "HTTP-Referer": "https://spec.inforeole.fr",
           "X-Title": "Spec Refiner",
         },
-        body: JSON.stringify({
-          model: route.model,
-          max_tokens: cap,
-          messages,
-        }),
+        body: JSON.stringify(upstreamBody),
       },
       UPSTREAM_TIMEOUT_MS,
     );

@@ -1,6 +1,10 @@
-import { Download, RotateCcw, Sparkles, CheckCircle2, Upload, Volume2, VolumeX, RefreshCw } from 'lucide-react';
-import { ChatInput, MessageList } from './index';
-import { INTERVIEW_CONFIG } from '../config/constants';
+import { Download, Sparkles, CheckCircle2, Upload, Volume2, VolumeX, RefreshCw } from 'lucide-react';
+import {
+    ChatInput,
+    InterviewProgress,
+    MessageList,
+    SingleProjectNotice
+} from './index';
 
 /**
  * Phase d'interview - conversation avec l'IA
@@ -8,8 +12,10 @@ import { INTERVIEW_CONFIG } from '../config/constants';
 export default function InterviewPhase({
     // Session data
     messages,
-    questionCount,
     finalSpec,
+    readiness,
+    canGenerate,
+    generationLabel,
     // Loading states
     isLoading,
     isRegenerating,
@@ -32,7 +38,6 @@ export default function InterviewPhase({
     onFileSelect,
     onFileRemove,
     onViewSpec,
-    onReset,
     // File validation dialog
     validationDialog,
     onValidationAction,
@@ -86,7 +91,7 @@ export default function InterviewPhase({
                         <div>
                             <h1 className="text-white font-semibold">Spec Refiner</h1>
                             <p className="text-slate-400 text-sm">
-                                {questionCount === 0 ? 'Prêt à démarrer' : `${questionCount} échange${questionCount > 1 ? 's' : ''}`}
+                                Projet unique
                             </p>
                         </div>
                     </div>
@@ -129,7 +134,7 @@ export default function InterviewPhase({
                                 </button>
                             </>
                         )}
-                        {questionCount >= INTERVIEW_CONFIG.MIN_QUESTIONS_BEFORE_SPEC && !finalSpec && (
+                        {canGenerate && !finalSpec && (
                             <button
                                 onClick={onRequestSpec}
                                 disabled={isLoading || isRegenerating}
@@ -143,7 +148,7 @@ export default function InterviewPhase({
                                 ) : (
                                     <>
                                         <CheckCircle2 className="w-4 h-4" />
-                                        Générer les specs
+                                        {generationLabel}
                                     </>
                                 )}
                             </button>
@@ -151,6 +156,11 @@ export default function InterviewPhase({
                     </div>
                 </div>
             </div>
+
+            <InterviewProgress
+                themes={readiness.themes}
+                missingDecisionCount={readiness.missingDecisionCount}
+            />
 
             <MessageList
                 messages={messages}
@@ -194,22 +204,16 @@ export default function InterviewPhase({
                 onFileRemove={onFileRemove}
                 disabled={isLoading || isProcessingFiles}
                 isProcessingFiles={isProcessingFiles}
-                showGenerateButton={questionCount >= INTERVIEW_CONFIG.MIN_QUESTIONS_BEFORE_SPEC && !finalSpec}
+                showGenerateButton={canGenerate && !finalSpec}
+                generationLabel={generationLabel}
                 onRequestSpec={onRequestSpec}
                 validationDialog={validationDialog}
                 onValidationAction={onValidationAction}
                 onValidationCancel={onValidationCancel}
             />
 
-            {/* Footer */}
-            <div className="py-3 flex justify-center border-t border-slate-800">
-                <button
-                    onClick={onReset}
-                    className="text-slate-500 hover:text-slate-300 text-sm flex items-center gap-2 transition-colors"
-                >
-                    <RotateCcw className="w-4 h-4" />
-                    Recommencer un nouveau projet
-                </button>
+            <div className="px-4 py-3 flex justify-center border-t border-slate-800">
+                <SingleProjectNotice />
             </div>
         </div>
     );

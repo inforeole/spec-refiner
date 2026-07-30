@@ -4,6 +4,10 @@ import {
     parseMarkdownToDocx,
     downloadAsWord
 } from '../utils/wordExport.js';
+import {
+    buildSpecFilename,
+    formatSpecTimestamp
+} from '../utils/specVersionFormat.js';
 
 // Mock file-saver
 vi.mock('file-saver', () => ({
@@ -11,6 +15,19 @@ vi.mock('file-saver', () => ({
 }));
 
 describe('Word Export', () => {
+    it('formats the stored instant in Europe Paris', () => {
+        expect(formatSpecTimestamp('2026-07-30T13:42:00Z')).toEqual({
+            date: '30 juillet 2026',
+            time: '15:42',
+            label: '30 juillet 2026 à 15:42'
+        });
+    });
+
+    it('builds the filename from the stored generation instant', () => {
+        expect(buildSpecFilename('2026-07-30T13:42:00Z'))
+            .toBe('specifications-2026-07-30-1542.docx');
+    });
+
     describe('parseMarkdownToDocx', () => {
         it('should parse H1 headers', () => {
             const result = parseMarkdownToDocx('# Main Title');
@@ -151,6 +168,33 @@ Another paragraph.`;
             expect(saveAs).toHaveBeenCalledWith(
                 expect.any(Blob),
                 'custom-name.docx'
+            );
+        });
+
+        it('uses the stored generation instant in the document', async () => {
+            const { saveAs } = await import('file-saver');
+            const JSZip = (await import('jszip')).default;
+
+            await downloadAsWord(
+                '# Test',
+                'specifications-2026-07-30-1542.docx',
+                '2026-07-30T13:42:00Z'
+            );
+
+            const blob = saveAs.mock.calls[0][0];
+            const arrayBuffer = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(reader.error);
+                reader.readAsArrayBuffer(blob);
+            });
+            const zip = await JSZip.loadAsync(arrayBuffer);
+            const documentXml = await zip.file('word/document.xml').async('string');
+
+            expect(documentXml).toContain('Généré le 30 juillet 2026 à 15:42');
+            expect(saveAs).toHaveBeenCalledWith(
+                expect.any(Blob),
+                'specifications-2026-07-30-1542.docx'
             );
         });
 
