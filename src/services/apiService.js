@@ -15,15 +15,16 @@ import { isValidResponse } from '../utils/responseValidation';
  * @param {Object} options
  * @param {Array} options.messages - Messages de la conversation (incluant le system prompt)
  * @param {AbortSignal} [options.signal] - Signal pour annuler la requête
- * @returns {Promise<string>} Contenu de la réponse
+ * @param {'summary'|'interview'|'spec'} [options.task] - Contrat de sortie
+ * @returns {Promise<string|Object>} Contenu de la réponse
  * @throws {Error} Si l'utilisateur n'est pas authentifié ou si l'appel échoue
  */
-export async function callOpenRouterAPI({ messages, signal }) {
+export async function callOpenRouterAPI({ messages, task = 'interview', signal }) {
     const response = await fetch(functionUrl('openrouter'), {
         method: 'POST',
         headers: functionHeaders(),
         body: JSON.stringify({
-            task: 'interview',
+            task,
             messages,
             maxTokens: API_CONFIG.MAX_TOKENS,
         }),
@@ -53,7 +54,16 @@ export async function callOpenRouterAPI({ messages, signal }) {
         throw new Error(errorMsg);
     }
 
-    return data.choices[0].message.content;
+    const content = data.choices[0].message.content;
+    if (task === 'summary') {
+        return content;
+    }
+
+    try {
+        return JSON.parse(content);
+    } catch {
+        throw new Error('Réponse structurée invalide');
+    }
 }
 
 /**
@@ -64,15 +74,20 @@ export async function callOpenRouterAPI({ messages, signal }) {
  * @param {number} [options.maxRetries] - Nombre max de tentatives
  * @returns {Promise<{response: string, isValid: boolean}>}
  */
-export async function callAPIWithRetry({ messages, signal, maxRetries = API_CONFIG.MAX_RETRIES }) {
-    let response = await callOpenRouterAPI({ messages, signal });
+export async function callAPIWithRetry({
+    messages,
+    task = 'interview',
+    signal,
+    maxRetries = API_CONFIG.MAX_RETRIES
+}) {
+    let response = await callOpenRouterAPI({ messages, task, signal });
     let retryCount = 0;
 
-    while (!isValidResponse(response) && retryCount < maxRetries) {
+    while (!isValidResponse(response, task) && retryCount < maxRetries) {
         console.warn(`Réponse incohérente détectée (tentative ${retryCount + 1}/${maxRetries}), nouvelle tentative...`);
         retryCount++;
-        response = await callOpenRouterAPI({ messages, signal });
+        response = await callOpenRouterAPI({ messages, task, signal });
     }
 
-    return { response, isValid: isValidResponse(response) };
+    return { response, isValid: isValidResponse(response, task) };
 }

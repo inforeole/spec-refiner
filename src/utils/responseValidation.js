@@ -23,7 +23,28 @@ export const extractFinalSpec = (text) => {
 };
 
 // Validation des réponses API - détecte les réponses incohérentes/corrompues
-export const isValidResponse = (text) => {
+export const isValidResponse = (text, task = 'summary') => {
+    if (task === 'interview') {
+        return Boolean(
+            text &&
+            typeof text === 'object' &&
+            typeof text.assistantMessage === 'string' &&
+            text.assistantMessage.trim().length > 0 &&
+            text.updates &&
+            typeof text.updates === 'object' &&
+            !Array.isArray(text.updates)
+        );
+    }
+
+    if (task === 'spec') {
+        return Boolean(
+            text &&
+            typeof text === 'object' &&
+            typeof text.markdown === 'string' &&
+            text.markdown.trim().length > 0
+        );
+    }
+
     if (!text || typeof text !== 'string' || text.trim().length < 10) {
         return false;
     }

@@ -2,6 +2,31 @@ import { describe, it, expect } from 'vitest';
 import { extractFinalSpec, isValidResponse } from '../utils/responseValidation';
 
 describe('isValidResponse', () => {
+    describe('valide les contrats structurés', () => {
+        it('accepte un entretien structuré', () => {
+            expect(isValidResponse({
+                assistantMessage: 'Quel est le résultat attendu ?',
+                updates: { capabilities: [] }
+            }, 'interview')).toBe(true);
+        });
+
+        it('rejette un entretien sans mises à jour', () => {
+            expect(isValidResponse({
+                assistantMessage: 'Quel est le résultat attendu ?'
+            }, 'interview')).toBe(false);
+        });
+
+        it('accepte une spécification markdown structurée', () => {
+            expect(isValidResponse({
+                markdown: '# Cahier des Charges\n\nContenu'
+            }, 'spec')).toBe(true);
+        });
+
+        it('rejette une spécification vide', () => {
+            expect(isValidResponse({ markdown: '   ' }, 'spec')).toBe(false);
+        });
+    });
+
     describe('rejette les réponses invalides', () => {
         it('rejette null', () => {
             expect(isValidResponse(null)).toBe(false);
