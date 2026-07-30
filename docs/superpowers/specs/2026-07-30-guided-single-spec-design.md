@@ -71,6 +71,16 @@ L’interface présente une progression par thème.
 Les thèmes minimaux sont le périmètre, les utilisateurs, le parcours principal, les règles métier, les données, les cas particuliers et les dépendances externes.
 Chaque thème possède un état parmi `à explorer`, `incomplet`, `complet` et `bloqué`.
 Une synthèse explique les informations manquantes sans exposer le modèle OpenSpec.
+La progression ne présente aucun pourcentage, car ce chiffre donnerait une précision artificielle.
+Elle affiche les thèmes et le nombre de décisions manquantes.
+
+### Direction visuelle validée
+
+Le bandeau détaillé est retenu au-dessus de la conversation.
+Les thèmes restent visibles pour montrer au client ce qui est acquis et ce qui manque.
+L’interface vise en priorité un usage sur ordinateur.
+La hauteur occupée par le bandeau est un compromis accepté.
+Le mobile reste fonctionnel sans devenir la surface de référence.
 
 ### Génération
 
