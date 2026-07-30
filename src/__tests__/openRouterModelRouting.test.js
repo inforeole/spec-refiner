@@ -49,6 +49,12 @@ describe('structured output contracts', () => {
             .toEqual(['assistantMessage', 'updates']);
     });
 
+    it('omits array size keywords rejected by Anthropic structured outputs', () => {
+        const format = getStructuredResponseFormat('interview');
+
+        expect(JSON.stringify(format)).not.toContain('"maxItems"');
+    });
+
     it('requires a markdown document for spec generation', () => {
         const format = getStructuredResponseFormat('spec');
 
