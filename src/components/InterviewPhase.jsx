@@ -1,5 +1,5 @@
-import { Download, RotateCcw, Sparkles, CheckCircle2, Upload, Volume2, VolumeX, RefreshCw } from 'lucide-react';
-import { ChatInput, MessageList } from './index';
+import { Download, Sparkles, CheckCircle2, Upload, Volume2, VolumeX, RefreshCw } from 'lucide-react';
+import { ChatInput, MessageList, SingleProjectNotice } from './index';
 import { INTERVIEW_CONFIG } from '../config/constants';
 
 /**
@@ -32,7 +32,6 @@ export default function InterviewPhase({
     onFileSelect,
     onFileRemove,
     onViewSpec,
-    onReset,
     // File validation dialog
     validationDialog,
     onValidationAction,
@@ -201,15 +200,8 @@ export default function InterviewPhase({
                 onValidationCancel={onValidationCancel}
             />
 
-            {/* Footer */}
-            <div className="py-3 flex justify-center border-t border-slate-800">
-                <button
-                    onClick={onReset}
-                    className="text-slate-500 hover:text-slate-300 text-sm flex items-center gap-2 transition-colors"
-                >
-                    <RotateCcw className="w-4 h-4" />
-                    Recommencer un nouveau projet
-                </button>
+            <div className="px-4 py-3 flex justify-center border-t border-slate-800">
+                <SingleProjectNotice />
             </div>
         </div>
     );

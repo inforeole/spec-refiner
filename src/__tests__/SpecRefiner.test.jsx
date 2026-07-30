@@ -1,16 +1,17 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SpecRefiner from '../SpecRefiner';
 import { useSession } from '../hooks/useSession';
 
 const mockClearInput = vi.fn();
-const mockResetSession = vi.fn();
+const interviewPhaseProps = vi.fn();
 
 vi.mock('../components', () => ({
     LoginForm: () => <div>Connexion</div>,
-    InterviewPhase: ({ onReset }) => (
-        <button type="button" onClick={onReset}>Réinitialiser</button>
-    ),
+    InterviewPhase: props => {
+        interviewPhaseProps(props);
+        return <div>Entretien</div>;
+    },
     CompletePhase: () => <div>Spécification</div>
 }));
 
@@ -29,6 +30,16 @@ vi.mock('../hooks/useAuth', () => ({
 
 vi.mock('../hooks/useSession', () => ({
     useSession: vi.fn()
+}));
+
+vi.mock('../hooks/useSpecVersions', () => ({
+    useSpecVersions: () => ({
+        versions: [],
+        selectedVersion: null,
+        selectVersion: vi.fn(),
+        isLoading: false,
+        error: null
+    })
 }));
 
 vi.mock('../hooks/useChatInput', () => ({
@@ -98,7 +109,6 @@ describe('SpecRefiner', () => {
             connectionError: null,
             saveError: 'Erreur de sauvegarde',
             updatePhase: vi.fn(),
-            resetSession: mockResetSession,
             enterModificationMode: vi.fn(),
             updateMessages: vi.fn()
         });
@@ -114,23 +124,11 @@ describe('SpecRefiner', () => {
         expect(screen.getByRole('alert').textContent).toContain('Session non sauvegardée');
     });
 
-    it('efface le brouillon avant d’attendre la sauvegarde du reset', async () => {
-        let resolveReset;
-        mockResetSession.mockReturnValue(new Promise(resolve => {
-            resolveReset = resolve;
-        }));
-        vi.stubGlobal('confirm', vi.fn(() => true));
-
+    it('ne transmet aucune action de recommencement au client', () => {
         render(<SpecRefiner />);
-        fireEvent.click(screen.getByRole('button', { name: 'Réinitialiser' }));
 
-        await waitFor(() => {
-            expect(mockResetSession).toHaveBeenCalledOnce();
-        });
-        expect(mockClearInput).toHaveBeenCalledOnce();
-
-        await act(async () => {
-            resolveReset();
-        });
+        expect(interviewPhaseProps).toHaveBeenCalledWith(
+            expect.not.objectContaining({ onReset: expect.anything() })
+        );
     });
 });

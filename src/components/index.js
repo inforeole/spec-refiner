@@ -6,3 +6,5 @@ export { default as LoginForm } from './LoginForm';
 export { default as MarkdownRenderer } from './MarkdownRenderer';
 export { default as MessageList } from './MessageList';
 export { default as ProjectInput } from './ProjectInput';
+export { default as SingleProjectNotice } from './SingleProjectNotice';
+export { default as SpecVersionSelector } from './SpecVersionSelector';
