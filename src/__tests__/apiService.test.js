@@ -70,6 +70,7 @@ describe('apiService', () => {
             );
 
             const callBody = JSON.parse(global.fetch.mock.calls[0][1].body);
+            expect(callBody.task).toBe('interview');
             expect(callBody.messages).toEqual(mockMessages);
             expect(callBody.maxTokens).toBe(1000);
             // Le modèle n'est plus choisi par le client (imposé côté serveur)

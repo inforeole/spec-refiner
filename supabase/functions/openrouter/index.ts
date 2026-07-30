@@ -15,10 +15,8 @@ import {
   readJsonBody,
   UpstreamTimeoutError,
 } from "../_shared/request.ts";
+import { resolveModelRoute } from "./modelRouting.ts";
 
-// Valeurs imposées côté serveur (le client ne peut pas les changer).
-const MODEL = "anthropic/claude-sonnet-4";
-const MAX_TOKENS_CAP = 8192;
 const MAX_REQUEST_BYTES = 256_000;
 const UPSTREAM_TIMEOUT_MS = 60_000;
 const RATE_LIMIT_PER_MINUTE = 20;
@@ -55,7 +53,7 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: { message: "Erreur d'autorisation" } }, 500);
   }
 
-  let payload: { messages?: unknown; maxTokens?: number };
+  let payload: { task?: unknown; messages?: unknown; maxTokens?: number };
   try {
     payload = await readJsonBody(req, MAX_REQUEST_BYTES) as typeof payload;
   } catch (error) {
@@ -68,7 +66,14 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: { message: "Corps JSON invalide" } }, 400);
   }
 
-  const { messages, maxTokens } = payload;
+  const { task, messages, maxTokens } = payload;
+  const route = resolveModelRoute(task);
+  if (!route) {
+    return jsonResponse(
+      { error: { message: "Type de tâche invalide" } },
+      400,
+    );
+  }
   if (!Array.isArray(messages) || messages.length === 0) {
     return jsonResponse({ error: { message: "messages requis" } }, 400);
   }
@@ -82,8 +87,10 @@ Deno.serve(async (req: Request) => {
   }
 
   const cap = Math.min(
-    typeof maxTokens === "number" && maxTokens > 0 ? maxTokens : MAX_TOKENS_CAP,
-    MAX_TOKENS_CAP,
+    typeof maxTokens === "number" && maxTokens > 0
+      ? maxTokens
+      : route.maxTokensCap,
+    route.maxTokensCap,
   );
 
   try {
@@ -97,7 +104,11 @@ Deno.serve(async (req: Request) => {
           "HTTP-Referer": "https://spec.inforeole.fr",
           "X-Title": "Spec Refiner",
         },
-        body: JSON.stringify({ model: MODEL, max_tokens: cap, messages }),
+        body: JSON.stringify({
+          model: route.model,
+          max_tokens: cap,
+          messages,
+        }),
       },
       UPSTREAM_TIMEOUT_MS,
     );

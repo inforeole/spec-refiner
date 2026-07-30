@@ -3,7 +3,7 @@
 > Statut au **2026-07-30** : migrations, Edge Functions et frontend déployés.
 > Les proxies refusent les requêtes sans session avec un HTTP 401.
 > La connexion publique fonctionne et le bundle de production ne contient plus les clés tierces.
-> `OPENROUTER_API_KEY` est configurée côté serveur et un appel direct au modèle imposé répond HTTP 200.
+> `OPENROUTER_API_KEY` est configurée côté serveur et les appels directs aux deux modèles autorisés répondent HTTP 200.
 > `INWORLD_API_KEY` est présent, mais le TTS n'a pas été testé avec un compte réel.
 
 ## Contexte
@@ -26,7 +26,9 @@ Les anciennes clés OpenRouter et Inworld ont été révoquées.
 - `INWORLD_API_KEY` est configuré dans les secrets Edge Functions.
 - La clé `spec-refiner-prod-2026-07` est configurée sous `OPENROUTER_API_KEY` dans les secrets Edge Functions et dans Infisical.
 - La clé OpenRouter est limitée à 50 USD par mois.
-- Un appel direct avec cette clé vers `anthropic/claude-sonnet-4` répond HTTP 200.
+- Les résumés sont routés côté serveur vers `anthropic/claude-haiku-4.5` avec un plafond de 256 tokens.
+- L’entretien et la spécification sont routés côté serveur vers `anthropic/claude-sonnet-4.6` avec un plafond de 8 192 tokens.
+- Un appel direct avec la clé dédiée vers chacun de ces modèles répond HTTP 200.
 - `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` sont configurées dans Vercel.
 - Le frontend sécurisé est déployé sur `https://spec.inforeole.fr`.
 - Le RPC de connexion répond HTTP 200 avec la clé publique actuellement servie.
@@ -39,7 +41,7 @@ Les anciennes clés OpenRouter et Inworld ont été révoquées.
 1. [x] Créer une nouvelle clé OpenRouter limitée au besoin de Spec Refiner.
 2. [x] Ajouter la valeur dans les secrets Edge Functions Supabase sous le nom `OPENROUTER_API_KEY`.
 3. [x] Ajouter le même secret dans Infisical, projet `spec-refiner`, sans préfixe `VITE_`.
-4. [x] Vérifier la clé avec un appel réel au modèle imposé.
+4. [x] Vérifier la clé avec un appel réel aux deux modèles autorisés.
 
 ## Étapes restantes
 
@@ -50,7 +52,7 @@ Les anciennes clés OpenRouter et Inworld ont été révoquées.
 
 - Le bundle de production ne contient aucune clé OpenRouter ou Inworld.
 - Un appel du proxy sans `X-Session-Token` valide renvoie HTTP 401.
-- Les logs OpenRouter montrent uniquement `anthropic/claude-sonnet-4`.
+- Les logs OpenRouter montrent uniquement `anthropic/claude-haiku-4.5` pour les résumés et `anthropic/claude-sonnet-4.6` pour l’entretien.
 
 ## Dette de sécurité fermée
 

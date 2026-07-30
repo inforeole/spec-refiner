@@ -127,11 +127,13 @@ INWORLD_API_KEY         # Secret Edge Function uniquement
 
 ## API Integration
 
-OpenRouter API avec Claude Sonnet 4 :
+OpenRouter API avec routage serveur par type de tâche :
 - Endpoint front : `${VITE_SUPABASE_URL}/functions/v1/openrouter`
 - Endpoint amont : `https://openrouter.ai/api/v1/chat/completions`, appelé uniquement par l'Edge Function
-- Modèle imposé côté serveur : `anthropic/claude-sonnet-4`
-- Limites serveur : 8 192 tokens de sortie, requête de 256 Ko, 20 appels par minute et par utilisateur
+- Résumés de fichiers : `anthropic/claude-haiku-4.5`, 256 tokens de sortie maximum
+- Entretien et spécification finale : `anthropic/claude-sonnet-4.6`, 8 192 tokens de sortie maximum
+- Le client transmet seulement `task: summary|interview` et ne choisit jamais directement le modèle
+- Limites communes : requête de 256 Ko, 20 appels par minute et par utilisateur
 - Interview conducted in French with one question at a time
 - Spec generation triggered by `[SPEC_COMPLETE]` marker in response
 
