@@ -1,9 +1,9 @@
 # TODO - Finalisation du déploiement sécurité
 
-> Statut au **2026-07-29** : migrations, Edge Functions et frontend déployés.
+> Statut au **2026-07-30** : migrations, Edge Functions et frontend déployés.
 > Les proxies refusent les requêtes sans session avec un HTTP 401.
 > La connexion publique fonctionne et le bundle de production ne contient plus les clés tierces.
-> L’IA reste indisponible car `OPENROUTER_API_KEY` manque côté serveur.
+> `OPENROUTER_API_KEY` est configurée côté serveur et un appel direct au modèle imposé répond HTTP 200.
 > `INWORLD_API_KEY` est présent, mais le TTS n'a pas été testé avec un compte réel.
 
 ## Contexte
@@ -24,7 +24,9 @@ Les anciennes clés OpenRouter et Inworld ont été révoquées.
 - Les deux fonctions valident le token de session côté serveur.
 - Les deux fonctions renvoient HTTP 401 sans token de session.
 - `INWORLD_API_KEY` est configuré dans les secrets Edge Functions.
-- `OPENROUTER_API_KEY` manque dans les secrets Edge Functions et dans Infisical.
+- La clé `spec-refiner-prod-2026-07` est configurée sous `OPENROUTER_API_KEY` dans les secrets Edge Functions et dans Infisical.
+- La clé OpenRouter est limitée à 50 USD par mois.
+- Un appel direct avec cette clé vers `anthropic/claude-sonnet-4` répond HTTP 200.
 - `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY` sont configurées dans Vercel.
 - Le frontend sécurisé est déployé sur `https://spec.inforeole.fr`.
 - Le RPC de connexion répond HTTP 200 avec la clé publique actuellement servie.
@@ -32,19 +34,17 @@ Les anciennes clés OpenRouter et Inworld ont été révoquées.
 - Les tests de sécurité, le lint et le build Vercel local passent.
 - Le bundle servi est identique au bundle construit et ne contient aucune clé OpenRouter ni endpoint tiers direct.
 
-## Actions manuelles requises
+## Gestion du secret OpenRouter
 
-1. Créer une nouvelle clé OpenRouter limitée au besoin de Spec Refiner.
-2. Ajouter la valeur dans les secrets Edge Functions Supabase sous le nom `OPENROUTER_API_KEY`.
-3. Ajouter le même secret dans Infisical, projet `spec-refiner`, sans préfixe `VITE_`.
-4. Ne jamais coller cette clé dans une conversation, un commit ou une variable Vite.
+1. [x] Créer une nouvelle clé OpenRouter limitée au besoin de Spec Refiner.
+2. [x] Ajouter la valeur dans les secrets Edge Functions Supabase sous le nom `OPENROUTER_API_KEY`.
+3. [x] Ajouter le même secret dans Infisical, projet `spec-refiner`, sans préfixe `VITE_`.
+4. [x] Vérifier la clé avec un appel réel au modèle imposé.
 
 ## Étapes restantes
 
-1. Configurer le secret serveur OpenRouter.
-2. Tester en production avec un compte réel un échange d’interview, une lecture TTS et une génération de spécification.
-3. Vérifier dans les logs OpenRouter que seul le modèle autorisé est utilisé.
-4. Supprimer dans Infisical les anciennes variables `VITE_OPENROUTER_API_KEY`, `VITE_INWORLD_API_KEY`, `VITE_ADMIN_TOKEN` et `VITE_APP_PASSWORD` si elles existent encore.
+1. Tester en production avec un compte réel un échange d’interview, une lecture TTS et une génération de spécification.
+2. Vérifier dans les logs OpenRouter que seul le modèle autorisé est utilisé.
 
 ## Vérifications de sécurité post-déploiement
 
