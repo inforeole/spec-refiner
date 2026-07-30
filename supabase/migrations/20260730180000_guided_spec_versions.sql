@@ -268,11 +268,41 @@ BEGIN
 END;
 $$;
 
+DROP FUNCTION IF EXISTS public.admin_list_users(uuid);
+
+CREATE FUNCTION public.admin_list_users(
+    p_session_token uuid
+)
+RETURNS TABLE(
+    id uuid,
+    email text,
+    created_at timestamptz,
+    is_admin boolean
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+    PERFORM public.assert_session_admin(p_session_token);
+
+    RETURN QUERY
+    SELECT
+        user_account.id,
+        user_account.email::text,
+        user_account.created_at,
+        user_account.is_admin
+    FROM public.specrefiner_users AS user_account
+    ORDER BY user_account.created_at DESC;
+END;
+$$;
+
 REVOKE ALL ON FUNCTION public.load_user_session_v3(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.save_user_session_v3(uuid, jsonb, text, integer, text, boolean, integer, jsonb) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.create_spec_version(uuid, uuid, text, integer) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.list_spec_versions(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.admin_reset_user_project(uuid, uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.admin_list_users(uuid) FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.clear_user_session_v2(uuid) FROM anon;
 
 GRANT EXECUTE ON FUNCTION public.load_user_session_v3(uuid) TO anon;
@@ -280,6 +310,7 @@ GRANT EXECUTE ON FUNCTION public.save_user_session_v3(uuid, jsonb, text, integer
 GRANT EXECUTE ON FUNCTION public.create_spec_version(uuid, uuid, text, integer) TO anon;
 GRANT EXECUTE ON FUNCTION public.list_spec_versions(uuid) TO anon;
 GRANT EXECUTE ON FUNCTION public.admin_reset_user_project(uuid, uuid) TO anon;
+GRANT EXECUTE ON FUNCTION public.admin_list_users(uuid) TO anon;
 
 COMMENT ON TABLE public.specrefiner_spec_versions
 IS 'Six dernières versions horodatées et immuables de la spécification logique';

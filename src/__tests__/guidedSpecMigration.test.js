@@ -34,4 +34,9 @@ describe('guided spec migration', () => {
         expect(migration).toContain('CREATE OR REPLACE FUNCTION public.save_user_session_v3');
         expect(migration).toContain('spec_model jsonb');
     });
+
+    it('identifies admin accounts so their projects cannot be reset from the list', () => {
+        expect(migration).toContain('CREATE FUNCTION public.admin_list_users');
+        expect(migration).toMatch(/RETURNS TABLE\([\s\S]*is_admin boolean/);
+    });
 });

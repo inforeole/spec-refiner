@@ -12,7 +12,13 @@ vi.mock('../lib/apiClient', () => ({
     getSessionToken: () => sessionToken,
 }));
 
-import { checkIsAdmin, createUser, listUsers, deleteUser } from '../services/userService';
+import {
+    checkIsAdmin,
+    createUser,
+    deleteUser,
+    listUsers,
+    resetUserProject
+} from '../services/userService';
 
 describe('userService — autorisation admin par token de session (post fuite VITE_ADMIN_TOKEN)', () => {
     beforeEach(() => {
@@ -71,5 +77,20 @@ describe('userService — autorisation admin par token de session (post fuite VI
             target_user_id: 'victim-id',
         });
         expect(res.success).toBe(true);
+    });
+
+    it('resets only the named user through the admin RPC', async () => {
+        rpc.mockResolvedValue({
+            data: [{ role: 'user', content: 'Ancien projet' }],
+            error: null
+        });
+
+        const result = await resetUserProject('user-2');
+
+        expect(rpc).toHaveBeenCalledWith('admin_reset_user_project', {
+            p_session_token: 'sess-123',
+            p_target_user_id: 'user-2'
+        });
+        expect(result.messages).toHaveLength(1);
     });
 });

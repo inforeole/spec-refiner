@@ -1,6 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Shield, UserPlus, Trash2, ArrowLeft, Loader2 } from 'lucide-react';
-import { createUser, listUsers, deleteUser, checkIsAdmin } from '../services/userService';
+import { Shield, UserPlus, Trash2, ArrowLeft, Loader2, RotateCcw } from 'lucide-react';
+import {
+    checkIsAdmin,
+    createUser,
+    deleteUser,
+    listUsers,
+    resetUserProject
+} from '../services/userService';
+import { deleteImage } from '../services/imageService';
+import { extractStorageImageUrls } from '../utils/messageUtils';
 
 export default function AdminPage() {
     // Autorisation admin: 'checking' | 'authorized' | 'denied'
@@ -18,6 +26,10 @@ export default function AdminPage() {
     const [isCreating, setIsCreating] = useState(false);
     const [createError, setCreateError] = useState(null);
     const [createSuccess, setCreateSuccess] = useState(null);
+    const [resetTarget, setResetTarget] = useState(null);
+    const [resetConfirmation, setResetConfirmation] = useState('');
+    const [isResetting, setIsResetting] = useState(false);
+    const [resetNotice, setResetNotice] = useState(null);
 
     // Vérifie l'autorisation admin au montage (serveur)
     useEffect(() => {
@@ -82,6 +94,46 @@ export default function AdminPage() {
             setError(err);
         }
     }, []);
+
+    const openResetDialog = useCallback(user => {
+        setResetTarget(user);
+        setResetConfirmation('');
+        setResetNotice(null);
+    }, []);
+
+    const closeResetDialog = useCallback(() => {
+        if (isResetting) return;
+        setResetTarget(null);
+        setResetConfirmation('');
+    }, [isResetting]);
+
+    const handleResetProject = useCallback(async () => {
+        if (!resetTarget || resetConfirmation !== resetTarget.email) {
+            return;
+        }
+
+        setIsResetting(true);
+        setError(null);
+        const result = await resetUserProject(resetTarget.id);
+        if (result.error) {
+            setError(result.error);
+            setIsResetting(false);
+            return;
+        }
+
+        const imageUrls = extractStorageImageUrls(result.messages);
+        const deletionResults = await Promise.all(
+            imageUrls.map(url => deleteImage(url))
+        );
+        const partialFailure = deletionResults.some(item => !item.success);
+        setResetNotice(partialFailure
+            ? 'Projet réinitialisé, mais certaines images n’ont pas pu être supprimées'
+            : `Projet de ${resetTarget.email} réinitialisé`
+        );
+        setResetTarget(null);
+        setResetConfirmation('');
+        setIsResetting(false);
+    }, [resetConfirmation, resetTarget]);
 
     const goToApp = () => {
         window.location.href = '/';
@@ -209,6 +261,11 @@ export default function AdminPage() {
                     {error && (
                         <p className="text-red-400 text-sm mb-4">{error}</p>
                     )}
+                    {resetNotice && (
+                        <p role="status" className="text-amber-300 text-sm mb-4">
+                            {resetNotice}
+                        </p>
+                    )}
 
                     {isLoadingUsers ? (
                         <div className="flex items-center justify-center py-8">
@@ -229,19 +286,89 @@ export default function AdminPage() {
                                             Créé le {new Date(user.created_at).toLocaleDateString('fr-FR')}
                                         </p>
                                     </div>
-                                    <button
-                                        onClick={() => handleDeleteUser(user.id, user.email)}
-                                        className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded-lg transition-colors"
-                                        title="Supprimer"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                                    <div className="flex items-center gap-1">
+                                        {!user.is_admin && (
+                                            <button
+                                                onClick={() => openResetDialog(user)}
+                                                className="p-2 text-slate-400 hover:text-amber-300 hover:bg-slate-700 rounded-lg transition-colors"
+                                                aria-label={`Réinitialiser le projet de ${user.email}`}
+                                                title="Réinitialiser le projet"
+                                            >
+                                                <RotateCcw className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => handleDeleteUser(user.id, user.email)}
+                                            className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded-lg transition-colors"
+                                            title="Supprimer"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
                     )}
                 </div>
             </div>
+
+            {resetTarget && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="reset-project-title"
+                >
+                    <div className="w-full max-w-md rounded-2xl border border-amber-500/40 bg-slate-800 p-6">
+                        <h2 id="reset-project-title" className="text-xl font-bold text-white">
+                            Réinitialiser le projet
+                        </h2>
+                        <p className="mt-3 text-sm text-slate-300">
+                            Le projet, la conversation et les six versions de{' '}
+                            <strong>{resetTarget.email}</strong> seront supprimés.
+                            Le compte client restera actif.
+                        </p>
+                        <label
+                            htmlFor="reset-confirmation"
+                            className="mt-5 block text-sm font-medium text-slate-200"
+                        >
+                            Confirmer avec l’adresse email
+                        </label>
+                        <input
+                            id="reset-confirmation"
+                            type="email"
+                            value={resetConfirmation}
+                            onChange={event => setResetConfirmation(event.target.value)}
+                            disabled={isResetting}
+                            className="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-4 py-3 text-white"
+                            autoComplete="off"
+                        />
+                        <div className="mt-5 flex justify-end gap-3">
+                            <button
+                                type="button"
+                                onClick={closeResetDialog}
+                                disabled={isResetting}
+                                className="rounded-xl bg-slate-700 px-4 py-2 text-white"
+                            >
+                                Annuler
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleResetProject}
+                                disabled={
+                                    isResetting ||
+                                    resetConfirmation !== resetTarget.email
+                                }
+                                className="rounded-xl bg-amber-600 px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                                {isResetting
+                                    ? 'Réinitialisation...'
+                                    : 'Réinitialiser définitivement'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
