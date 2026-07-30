@@ -89,17 +89,20 @@ INWORLD_API_KEY         # Secret Edge Function uniquement
 **Authentification Multi-Users (Supabase):**
 - Table `specrefiner_users` : id, email, password_hash, created_at
 - Hashage via pgcrypto (fonctions RPC `create_user`, `verify_password`)
-- Page admin `/admin` : création/suppression d'utilisateurs (réservée aux comptes `is_admin`, vérifié serveur via le token de session ; migration 003)
+- Page admin `/admin` : création et suppression d'utilisateurs, plus réinitialisation explicite d'un projet client après confirmation de son email.
 
 **Security Architecture (Row Level Security):**
 - RLS activé sur `specrefiner_users` et `specrefiner_sessions`
 - Toutes les opérations passent par des RPCs `SECURITY DEFINER`
 - Pas d'accès direct aux tables depuis le client
-- RPCs de session utilisées par le client : `load_user_session_v2`, `save_user_session_v2`, `clear_user_session_v2`
-- Les RPCs de session v2 déduisent toujours l'utilisateur depuis `p_session_token` et n'acceptent aucun `user_id` client.
-- Les anciennes RPCs `load_user_session`, `save_user_session`, `clear_user_session` restent temporairement disponibles pour le déploiement progressif et doivent être révoquées après validation du client en production.
+- RPCs de session utilisées par le client : `load_user_session_v3` et `save_user_session_v3`.
+- Les RPCs de session v3 déduisent toujours l'utilisateur depuis `p_session_token` et n'acceptent aucun `user_id` client.
+- Le client ne peut plus exécuter `clear_user_session_v2`.
+- `admin_reset_user_project` est la seule réinitialisation de projet exposée et exige un compte `is_admin`.
+- `create_spec_version` et `list_spec_versions` gèrent les six versions horodatées sans accès direct à la table.
+- Les anciennes RPCs `load_user_session`, `save_user_session` et `clear_user_session` sont révoquées par la migration 7.
 - La RPC interne `create_user` n'est plus exécutable par `PUBLIC`, `anon` ou `authenticated`.
-- RPCs admin : `admin_create_user`, `admin_list_users`, `admin_delete_user` (exigent `p_session_token` d'un compte `is_admin` ; helpers `assert_session_admin` / `is_session_admin`)
+- RPCs admin : `admin_create_user`, `admin_list_users`, `admin_delete_user` et `admin_reset_user_project`.
 - Les proxies IA exigent un token de session, imposent le modèle et les plafonds, limitent la taille des requêtes et appliquent un rate limit atomique par utilisateur.
 - La vérification JWT plateforme des Edge Functions est désactivée, car l'authentification applicative est effectuée côté serveur par `consume_specrefiner_api_rate_limit`.
 
@@ -108,12 +111,16 @@ INWORLD_API_KEY         # Secret Edge Function uniquement
 - `src/App.jsx` - Router (/, /admin)
 - `src/components/AdminPage.jsx` - Gestion des utilisateurs
 - `src/hooks/useAuth.js` - Hook d'authentification
+- `src/hooks/useSpecVersions.js` - Chargement, création et sélection des six versions immuables
+- `src/domain/specModel.js` - Modèle fonctionnel caché et fusion déterministe des mises à jour
+- `src/domain/specReadiness.js` - Évaluation qualitative du cadrage sans pourcentage
 - `src/services/userService.js` - CRUD utilisateurs Supabase
 - `src/lib/supabase.js` - Client Supabase
 
 **State Persistence:**
 - `sessionStorage` - Auth state (`spec-refiner-auth` : user object JSON)
-- Supabase - Session applicative associée au token via les RPCs v2.
+- Supabase - Session applicative et modèle fonctionnel associés au token via les RPCs v3.
+- Supabase - Six versions immuables maximum dans `specrefiner_spec_versions`.
 - `localStorage` - Préférence locale d'activation du TTS uniquement.
 
 ## Tech Stack
@@ -132,10 +139,12 @@ OpenRouter API avec routage serveur par type de tâche :
 - Endpoint amont : `https://openrouter.ai/api/v1/chat/completions`, appelé uniquement par l'Edge Function
 - Résumés de fichiers : `anthropic/claude-haiku-4.5`, 256 tokens de sortie maximum
 - Entretien et spécification finale : `anthropic/claude-sonnet-4.6`, 8 192 tokens de sortie maximum
-- Le client transmet seulement `task: summary|interview` et ne choisit jamais directement le modèle
+- Le client transmet seulement `task: summary|interview|spec` et ne choisit jamais directement le modèle
 - Limites communes : requête de 256 Ko, 20 appels par minute et par utilisateur
-- Interview conducted in French with one question at a time
-- Spec generation triggered by `[SPEC_COMPLETE]` marker in response
+- L'entretien reste en français avec une question métier à la fois.
+- Les tâches `interview` et `spec` utilisent un JSON Schema strict choisi par le serveur.
+- L'entretien renvoie `assistantMessage` et des mises à jour du modèle fonctionnel.
+- La génération renvoie un document `markdown` qui doit être enregistré avant l'affichage de la phase complète.
 
 Inworld TTS :
 - Endpoint front : `${VITE_SUPABASE_URL}/functions/v1/inworld`
@@ -167,10 +176,12 @@ GitHub Actions exécute installation figée, lint, tests et build sur chaque pul
 5. `20260729194159_secure_session_rpcs.sql`
 6. `20260729201527_fix_api_rate_limit_conflict.sql`
 7. `20260729202858_revoke_legacy_session_rpcs.sql`
+8. `20260730180000_guided_spec_versions.sql`
 
 La migration 5 ajoute les RPCs de session v2 et révoque l'appel public direct à `create_user`.
 La migration 6 corrige l'ambiguïté SQL du rate limiter et durcit son `search_path`.
 La migration 7 révoque les anciennes RPCs après validation transactionnelle avec deux utilisateurs et deux tokens temporaires.
+La migration 8 ajoute le modèle fonctionnel, les RPCs v3, les six versions horodatées et la réinitialisation réservée à l'administrateur.
 
 Déployer ensuite les Edge Functions `openrouter` et `inworld` avec leurs secrets serveur.
 Ne jamais recréer `specrefiner_config.admin_token`, `VITE_ADMIN_TOKEN`, `VITE_APP_PASSWORD`, `VITE_OPENROUTER_API_KEY` ou `VITE_INWORLD_API_KEY`.

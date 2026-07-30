@@ -1,4 +1,4 @@
-import type { OpenRouterTask } from "./modelRouting.ts";
+import type { ModelRoute, OpenRouterTask } from "./modelRouting.ts";
 
 const stringArray = {
   type: "array",
@@ -193,5 +193,26 @@ export function getStructuredResponseFormat(task: OpenRouterTask) {
       strict: true,
       schema: task === "interview" ? interviewSchema : specSchema,
     },
+  };
+}
+
+export function buildOpenRouterRequest(
+  route: ModelRoute,
+  messages: unknown[],
+  maxTokens: number,
+) {
+  const responseFormat = getStructuredResponseFormat(route.task);
+  return {
+    model: route.model,
+    max_tokens: maxTokens,
+    messages,
+    ...(responseFormat
+      ? {
+        response_format: responseFormat,
+        provider: {
+          require_parameters: true,
+        },
+      }
+      : {}),
   };
 }

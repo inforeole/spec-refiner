@@ -38,5 +38,6 @@ describe('guided spec migration', () => {
     it('identifies admin accounts so their projects cannot be reset from the list', () => {
         expect(migration).toContain('CREATE FUNCTION public.admin_list_users');
         expect(migration).toMatch(/RETURNS TABLE\([\s\S]*is_admin boolean/);
+        expect(migration).toContain("RAISE EXCEPTION 'Admin project cannot be reset'");
     });
 });

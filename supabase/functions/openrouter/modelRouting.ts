@@ -1,6 +1,6 @@
 export type OpenRouterTask = "summary" | "interview" | "spec";
 
-type ModelRoute = {
+export type ModelRoute = {
   task: OpenRouterTask;
   model: string;
   maxTokensCap: number;

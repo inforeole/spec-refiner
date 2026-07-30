@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { resolveModelRoute } from '../../supabase/functions/openrouter/modelRouting.ts';
-import { getStructuredResponseFormat } from '../../supabase/functions/openrouter/structuredOutputs.ts';
+import {
+    buildOpenRouterRequest,
+    getStructuredResponseFormat
+} from '../../supabase/functions/openrouter/structuredOutputs.ts';
 
 describe('resolveModelRoute', () => {
     it('route les résumés vers Haiku avec un plafond réduit', () => {
@@ -55,5 +58,17 @@ describe('structured output contracts', () => {
 
     it('keeps summaries unstructured', () => {
         expect(getStructuredResponseFormat('summary')).toBeNull();
+    });
+
+    it('adds server owned schema and provider enforcement only to structured tasks', () => {
+        const interviewRoute = resolveModelRoute('interview');
+        const summaryRoute = resolveModelRoute('summary');
+        const interview = buildOpenRouterRequest(interviewRoute, [], 1000);
+        const summary = buildOpenRouterRequest(summaryRoute, [], 100);
+
+        expect(interview.response_format.json_schema.strict).toBe(true);
+        expect(interview.provider).toEqual({ require_parameters: true });
+        expect(summary).not.toHaveProperty('response_format');
+        expect(summary).not.toHaveProperty('provider');
     });
 });

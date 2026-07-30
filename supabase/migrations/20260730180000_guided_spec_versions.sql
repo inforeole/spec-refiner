@@ -253,6 +253,15 @@ DECLARE
 BEGIN
     PERFORM public.assert_session_admin(p_session_token);
 
+    IF EXISTS (
+        SELECT 1
+        FROM public.specrefiner_users AS target_user
+        WHERE target_user.id = p_target_user_id
+          AND target_user.is_admin = true
+    ) THEN
+        RAISE EXCEPTION 'Admin project cannot be reset';
+    END IF;
+
     SELECT session.messages
     INTO v_old_messages
     FROM public.specrefiner_sessions AS session
