@@ -226,6 +226,20 @@ Après toute modification d'interface (composants React, styles, interactions), 
 **Compte de test** : utiliser un compte dédié dont le mot de passe est géré hors du bundle client.
 La page `/admin` exige un compte `is_admin` authentifié et un token de session valide.
 
+## E2E de production obligatoire
+
+Toute livraison runtime doit être testée après déploiement par le parcours réel sur `https://spec.inforeole.fr`.
+
+L'absence d'un compte ou d'un mot de passe de test n'autorise jamais à omettre cet E2E.
+
+Si aucun accès réutilisable n'est disponible, créer un compte E2E éphémère avec un mot de passe aléatoire jamais affiché, exécuter le parcours, puis supprimer précisément ce compte, ses sessions, ses versions et le secret temporaire.
+
+Cette création et ce nettoyage ciblés sont autorisés de manière permanente par Phil depuis le 2026-07-30.
+
+Le test doit vérifier au minimum la connexion, l'action métier modifiée, son effet serveur ou base de données, les états d'erreur visibles et l'absence d'erreur console nouvelle.
+
+Ne jamais annoncer une livraison terminée sur la seule base des tests unitaires, de la CI, du build ou d'un HTTP 200.
+
 ## Post-Mortem & Capitalisation
 
 Système automatique de logging et d'analyse pour améliorer les pratiques de développement.
