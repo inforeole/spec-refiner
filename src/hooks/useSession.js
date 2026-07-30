@@ -4,8 +4,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { loadSession, saveSession, checkSupabaseConnection, cancelPendingSaves } from '../services/sessionService';
-import { deleteImage } from '../services/imageService';
-import { extractStorageImageUrls } from '../utils/messageUtils';
+import { createEmptySpecModel, normalizeSpecModel } from '../domain/specModel';
 
 // Détection mobile (user agent + écran tactile)
 const isMobileDevice = () => {
@@ -36,7 +35,8 @@ export function useSession(userId, sessionToken) {
         questionCount: 0,
         finalSpec: null,
         isModificationMode: false,
-        messageCountAtLastSpec: 0
+        messageCountAtLastSpec: 0,
+        specModel: createEmptySpecModel()
     });
     const [isLoading, setIsLoading] = useState(true);
     const [connectionError, setConnectionError] = useState(null);
@@ -127,8 +127,12 @@ export function useSession(userId, sessionToken) {
             }
 
             if (data && data.messages && data.messages.length > 0) {
-                setSessionData(data);
-                lastSavedData.current = data;
+                const normalizedData = {
+                    ...data,
+                    specModel: normalizeSpecModel(data.specModel)
+                };
+                setSessionData(normalizedData);
+                lastSavedData.current = normalizedData;
             } else {
                 // New session with welcome message
                 const initialData = {
@@ -137,7 +141,8 @@ export function useSession(userId, sessionToken) {
                     questionCount: 0,
                     finalSpec: null,
                     isModificationMode: false,
-                    messageCountAtLastSpec: 0
+                    messageCountAtLastSpec: 0,
+                    specModel: createEmptySpecModel()
                 };
                 setSessionData(initialData);
                 // Save initial session
@@ -245,50 +250,14 @@ export function useSession(userId, sessionToken) {
         setSessionData(prev => ({ ...prev, finalSpec }));
     }, [sessionToken]);
 
-    const resetSession = useCallback(async () => {
-        if (!sessionToken) return;
-
-        const resetUserId = currentUserId.current;
-        const resetSessionToken = sessionToken;
-
-        // Keep image URLs until the remote session no longer references them
-        const imageUrls = extractStorageImageUrls(sessionData.messages);
-
-        const initialData = {
-            messages: [{ role: 'assistant', content: getWelcomeMessage() }],
-            phase: 'interview',
-            questionCount: 0,
-            finalSpec: null,
-            isModificationMode: false,
-            messageCountAtLastSpec: 0
-        };
-        lastSavedData.current = null;
-        setSaveError(null);
-        setSessionData(initialData);
-        const saveResult = await saveSession(resetSessionToken, initialData, true);
-        const isCurrentReset = (
-            currentUserId.current === resetUserId &&
-            currentSessionToken.current === resetSessionToken
-        );
-
-        if (!isCurrentReset) {
-            if (saveResult.success && imageUrls.length > 0) {
-                await Promise.all(imageUrls.map(url => deleteImage(url)));
-            }
-            return;
-        }
-
-        if (saveResult.success) {
-            lastSavedData.current = initialData;
-            setSaveError(null);
-            if (imageUrls.length > 0) {
-                await Promise.all(imageUrls.map(url => deleteImage(url)));
-            }
-        } else {
-            console.error('Failed to save reset session:', saveResult.error);
-            setSaveError(saveResult.error);
-        }
-    }, [sessionToken, sessionData.messages]);
+    const updateSpecModel = useCallback((updater) => {
+        setSessionData(prev => ({
+            ...prev,
+            specModel: normalizeSpecModel(
+                typeof updater === 'function' ? updater(prev.specModel) : updater
+            )
+        }));
+    }, []);
 
     return {
         ...sessionData,
@@ -299,7 +268,7 @@ export function useSession(userId, sessionToken) {
         updatePhase,
         updateQuestionCount,
         updateFinalSpec,
-        resetSession,
+        updateSpecModel,
         enterModificationMode,
         exitModificationMode,
         updateMessageCountAtLastSpec
