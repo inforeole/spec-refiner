@@ -11,6 +11,7 @@ import { useTTSMessage } from './hooks/useTTSMessage';
 import { useMessageFlow } from './hooks/useMessageFlow';
 import { useSpecVersions } from './hooks/useSpecVersions';
 import { buildSpecFilename } from './utils/specVersionFormat';
+import { evaluateSpecReadiness } from './domain/specReadiness';
 
 export default function SpecRefiner() {
     // ==================== Hooks ====================
@@ -32,8 +33,8 @@ export default function SpecRefiner() {
     const {
         messages,
         phase,
-        questionCount,
         finalSpec,
+        specModel,
         messageCountAtLastSpec,
         isLoading: isSessionLoading,
         connectionError,
@@ -47,6 +48,11 @@ export default function SpecRefiner() {
         createVersion,
         error: versionError
     } = useSpecVersions(user?.sessionToken);
+    const readiness = evaluateSpecReadiness(specModel);
+    const canGenerate = Boolean(
+        specModel?.scope?.lotName ||
+        specModel?.capabilities?.length > 0
+    );
 
     const {
         inputMessage,
@@ -216,8 +222,10 @@ Dis-moi ce que tu voudrais changer ou préciser !`
                 <InterviewPhase
                     // Session data
                     messages={messages}
-                    questionCount={questionCount}
                     finalSpec={finalSpec}
+                    readiness={readiness}
+                    canGenerate={canGenerate}
+                    generationLabel={readiness.label}
                     // Loading states
                     isLoading={isLoading}
                     isRegenerating={isRegenerating}

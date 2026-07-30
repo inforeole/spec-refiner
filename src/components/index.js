@@ -2,6 +2,7 @@ export { default as ChatInput } from './ChatInput';
 export { default as CompletePhase } from './CompletePhase';
 export { default as FileList } from './FileList';
 export { default as InterviewPhase } from './InterviewPhase';
+export { default as InterviewProgress } from './InterviewProgress';
 export { default as LoginForm } from './LoginForm';
 export { default as MarkdownRenderer } from './MarkdownRenderer';
 export { default as MessageList } from './MessageList';
