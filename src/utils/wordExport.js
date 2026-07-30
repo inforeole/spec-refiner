@@ -14,6 +14,7 @@ import {
 } from 'docx';
 import { saveAs } from 'file-saver';
 import { parseMarkdown } from '../services/markdownParserService';
+import { formatSpecTimestamp } from './specVersionFormat';
 
 /**
  * Transform InlineNode[] to TextRun[]
@@ -186,7 +187,14 @@ export function parseMarkdownToDocx(markdown) {
 /**
  * Generate and download a Word document from markdown content
  */
-export async function downloadAsWord(markdownContent, filename = 'specifications.docx') {
+export async function downloadAsWord(
+    markdownContent,
+    filename = 'specifications.docx',
+    generatedAt = null
+) {
+    const generationLabel = generatedAt
+        ? `Généré le ${formatSpecTimestamp(generatedAt).label}`
+        : 'Version non horodatée';
     const doc = new Document({
         sections: [
             {
@@ -209,11 +217,7 @@ export async function downloadAsWord(markdownContent, filename = 'specifications
                     new Paragraph({
                         children: [
                             new TextRun({
-                                text: `Généré le ${new Date().toLocaleDateString('fr-FR', {
-                                    day: 'numeric',
-                                    month: 'long',
-                                    year: 'numeric'
-                                })}`,
+                                text: generationLabel,
                                 size: 22,
                                 color: '666666'
                             })
