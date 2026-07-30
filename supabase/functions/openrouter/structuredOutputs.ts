@@ -58,7 +58,6 @@ const interviewSchema = {
         },
         capabilities: {
           type: "array",
-          maxItems: 8,
           items: {
             type: "object",
             additionalProperties: false,
@@ -76,7 +75,6 @@ const interviewSchema = {
         },
         requirements: {
           type: "array",
-          maxItems: 40,
           items: {
             type: "object",
             additionalProperties: false,
