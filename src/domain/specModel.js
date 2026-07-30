@@ -86,6 +86,19 @@ function mergeById(current, updates, normalizer = normalizeRecord) {
     return merged;
 }
 
+function compactDelta(value) {
+    if (!value || typeof value !== 'object') {
+        return {};
+    }
+    return Object.fromEntries(
+        Object.entries(value).filter(([, item]) => (
+            item !== null &&
+            item !== undefined &&
+            (!Array.isArray(item) || item.length > 0)
+        ))
+    );
+}
+
 export function createEmptySpecModel() {
     return {
         schemaVersion: SPEC_MODEL_SCHEMA_VERSION,
@@ -159,11 +172,11 @@ export function applySpecUpdates(model, updates) {
         ...current,
         intent: {
             ...current.intent,
-            ...(incoming.intent && typeof incoming.intent === 'object' ? incoming.intent : {})
+            ...compactDelta(incoming.intent)
         },
         scope: {
             ...current.scope,
-            ...(incoming.scope && typeof incoming.scope === 'object' ? incoming.scope : {})
+            ...compactDelta(incoming.scope)
         },
         capabilities,
         requirements,

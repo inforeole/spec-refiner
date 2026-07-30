@@ -44,6 +44,7 @@ export default function SpecRefiner() {
         versions,
         selectedVersion,
         selectVersion,
+        createVersion,
         error: versionError
     } = useSpecVersions(user?.sessionToken);
 
@@ -62,7 +63,15 @@ export default function SpecRefiner() {
         handleValidationCancel
     } = useChatInput(user?.id);
 
-    const { isLoading, isRegenerating, errorMessage, clearError, sendMessage, requestFinalSpec, abortRequest } = useInterviewChat(sessionHook);
+    const {
+        isLoading,
+        isRegenerating,
+        errorMessage,
+        clearError,
+        sendMessage,
+        requestFinalSpec,
+        abortRequest
+    } = useInterviewChat(sessionHook, { createVersion });
 
     // Calculer si nouvelles modifications depuis la dernière génération
     const hasNewMessagesSinceSpec = messages.length > messageCountAtLastSpec;

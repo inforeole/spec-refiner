@@ -55,6 +55,24 @@ describe('specModel', () => {
         expect(updated.capabilities.map(item => item.id)).toEqual(['auth', 'export']);
     });
 
+    it('preserves confirmed intent when a structured delta contains empty defaults', () => {
+        const initial = createEmptySpecModel();
+        initial.intent.problem = 'Les dossiers sont traités à la main';
+        initial.intent.targetUsers = ['Gestionnaire'];
+
+        const updated = applySpecUpdates(initial, {
+            intent: {
+                problem: null,
+                targetUsers: [],
+                expectedOutcome: null,
+                successIndicators: []
+            }
+        });
+
+        expect(updated.intent.problem).toBe('Les dossiers sont traités à la main');
+        expect(updated.intent.targetUsers).toEqual(['Gestionnaire']);
+    });
+
     it('rejects updates above product limits', () => {
         const updates = {
             capabilities: Array.from({ length: 9 }, (_, index) => ({
