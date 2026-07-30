@@ -23,6 +23,7 @@ export async function callOpenRouterAPI({ messages, signal }) {
         method: 'POST',
         headers: functionHeaders(),
         body: JSON.stringify({
+            task: 'interview',
             messages,
             maxTokens: API_CONFIG.MAX_TOKENS,
         }),

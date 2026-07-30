@@ -27,6 +27,7 @@ export async function generateFileSummary(fileContent, fileName) {
         method: 'POST',
         headers: functionHeaders(),
         body: JSON.stringify({
+            task: 'summary',
             maxTokens: 50,
             messages: [
                 { role: 'system', content: SUMMARY_PROMPT },
