@@ -224,3 +224,10 @@ npm run postmortem   # Génère un rapport d'analyse
 - Chaque prompt est loggé avec timestamp, branche git et hash de commit
 - Les erreurs des outils sont capturées automatiquement
 - Les logs ne sont PAS committés (dans .gitignore)
+
+## Secrets - Infisical
+
+Les secrets de ce projet vivent dans Infisical self-hosted (`http://infisical.mesh:8080`, accessible via le mesh NetBird uniquement), workspace défini par `.infisical.json`.
+La CLI locale est déjà installée et loguée : ne JAMAIS demander de « brancher une session Infisical ». Vérifier soi-même : `infisical user get token --domain http://infisical.mesh:8080 --silent` (si échec : d'abord suspecter le mesh NetBird, pas Infisical).
+Patterns complets (infisical run, export, machine identity serveur, onboarding) : skill partagé `infisical-connect` (`~/Documents/dev/agent-shared/skills/infisical-connect/SKILL.md`).
+Jamais de secret en clair dans un fichier ou un commit ; `.env.local`/`.dev.vars` uniquement générés par `infisical export`, jamais commités ni édités à la main.
