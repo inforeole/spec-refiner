@@ -14,10 +14,10 @@ describe('resolveModelRoute', () => {
         });
     });
 
-    it('route l’entretien vers Sonnet 4.6', () => {
+    it('route l’entretien vers Sonnet 5.5', () => {
         expect(resolveModelRoute('interview')).toEqual({
             task: 'interview',
-            model: 'anthropic/claude-sonnet-4.6',
+            model: 'anthropic/claude-sonnet-5.5',
             maxTokensCap: 8192
         });
     });
@@ -25,7 +25,7 @@ describe('resolveModelRoute', () => {
     it('routes final specs through Sonnet with the document cap', () => {
         expect(resolveModelRoute('spec')).toEqual({
             task: 'spec',
-            model: 'anthropic/claude-sonnet-4.6',
+            model: 'anthropic/claude-sonnet-5.5',
             maxTokensCap: 8192
         });
     });
@@ -74,6 +74,8 @@ describe('structured output contracts', () => {
 
         expect(interview.response_format.json_schema.strict).toBe(true);
         expect(interview.provider).toEqual({ require_parameters: true });
+        expect(interview.reasoning).toEqual({ effort: 'low' });
+        expect(summary).not.toHaveProperty('reasoning');
         expect(summary).not.toHaveProperty('response_format');
         expect(summary).not.toHaveProperty('provider');
     });
