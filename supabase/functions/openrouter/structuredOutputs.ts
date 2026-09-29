@@ -204,6 +204,9 @@ export function buildOpenRouterRequest(
     model: route.model,
     max_tokens: maxTokens,
     messages,
+    ...(route.model === "anthropic/claude-sonnet-5.5"
+      ? { reasoning: { effort: "low" } }
+      : {}),
     ...(responseFormat
       ? {
         response_format: responseFormat,

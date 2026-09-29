@@ -14,12 +14,12 @@ const ROUTES: Record<OpenRouterTask, ModelRoute> = {
   },
   interview: {
     task: "interview",
-    model: "anthropic/claude-sonnet-4.6",
+    model: "anthropic/claude-sonnet-5.5",
     maxTokensCap: 8192,
   },
   spec: {
     task: "spec",
-    model: "anthropic/claude-sonnet-4.6",
+    model: "anthropic/claude-sonnet-5.5",
     maxTokensCap: 8192,
   },
 };
